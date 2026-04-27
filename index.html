@@ -2979,7 +2979,7 @@ function applyStairState(data){
   document.getElementById('f2-controls').style.display=S.f2independent?'block':'none';
   document.getElementById('r90-positions').style.display=(S.type==='r90r'||S.type==='r90l')?'block':'none';
   document.getElementById('r180-positions').style.display=S.type==='r180'?'block':'none';
-  document.getElementById('f2-offset-row').style.display='none'; // now inside r180-positions
+  document.getElementById('f2-offset-row').style.display=S.type==='r180'?'block':'none';
   if(isRepos && REPOS.breddeMm){
     document.getElementById('s-rb').value=REPOS.breddeMm; document.getElementById('v-rb').textContent=REPOS.breddeMm+' mm';
     document.getElementById('s-rd').value=REPOS.dybdeMm;  document.getElementById('v-rd').textContent=REPOS.dybdeMm+' mm';
