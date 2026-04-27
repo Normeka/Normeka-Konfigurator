@@ -1075,6 +1075,20 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       </div>
 
       <div class="ss">
+        <div class="st sa">🔗 Del konfigurasjon</div>
+        <div style="font-size:.74rem;color:var(--muted);margin-bottom:.5rem;">Generer en kort ID du kan dele med kolleger. De limer den inn for å hente opp nøyaktig samme konfigurasjon.</div>
+        <button class="obtn obs" style="background:var(--surface2);color:var(--nblue);border:1.5px solid var(--nblue);" onclick="shareConfigStair()">🔗 Generer delelink →</button>
+        <div id="s-share-wrap" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:#eaf2f7;border-radius:7px;border:1px solid var(--nblue);">
+          <div style="font-size:.65rem;font-weight:700;color:var(--nblue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem;">Del denne ID-en</div>
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <div style="font-family:monospace;font-size:1rem;font-weight:700;color:var(--nblue);flex:1;letter-spacing:.05em;" id="s-share-id-display">—</div>
+            <button onclick="copyShareId('s')" style="flex-shrink:0;padding:.3rem .7rem;background:var(--nblue);color:#fff;border:none;border-radius:5px;font-size:.78rem;cursor:pointer;font-weight:600;">📋 Kopier</button>
+          </div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:.3rem;">Gyldig i 90 dager · Ingen e-post nødvendig</div>
+        </div>
+      </div>
+
+      <div class="ss">
         <div class="st sa">Last inn konfigurasjon</div>
         <div class="ff"><label>Konfigurasjon-ID</label><input type="text" id="load-config-input" placeholder="TRP-XXXX" style="font-family:monospace;font-size:.8rem;"></div>
         <button class="obtn obs" style="background:var(--surface2);color:var(--nblue);border:1.5px solid var(--nblue);" onclick="loadConfigById()">Last inn konfigurasjon →</button>
@@ -1244,6 +1258,20 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
             <button onclick="copyConfigId('w')" style="flex-shrink:0;padding:.2rem .6rem;background:var(--ngreen);color:#fff;border:none;border-radius:5px;font-size:.72rem;cursor:pointer;">Kopier</button>
           </div>
           <div style="font-size:.68rem;color:var(--muted);margin-top:.25rem;">Del ID-en med kollega — de limer den inn her for å hente konfigurasjonen (gyldig i 90 dager).</div>
+        </div>
+      </div>
+
+      <div class="ss">
+        <div class="st wa">🔗 Del konfigurasjon</div>
+        <div style="font-size:.74rem;color:var(--muted);margin-bottom:.5rem;">Generer en kort ID du kan dele med kolleger.</div>
+        <button class="obtn obw" style="background:var(--surface2);color:var(--ngreen);border:1.5px solid var(--ngreen);" onclick="shareConfigWalk()">🔗 Generer delelink →</button>
+        <div id="w-share-wrap" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:#f3f8ec;border-radius:7px;border:1px solid var(--ngreen);">
+          <div style="font-size:.65rem;font-weight:700;color:var(--ngreen);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem;">Del denne ID-en</div>
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <div style="font-family:monospace;font-size:1rem;font-weight:700;color:var(--ngreen);flex:1;letter-spacing:.05em;" id="w-share-id-display">—</div>
+            <button onclick="copyShareId('w')" style="flex-shrink:0;padding:.3rem .7rem;background:var(--ngreen);color:#fff;border:none;border-radius:5px;font-size:.78rem;cursor:pointer;font-weight:600;">📋 Kopier</button>
+          </div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:.3rem;">Gyldig i 90 dager · Ingen e-post nødvendig</div>
         </div>
       </div>
 
@@ -3017,7 +3045,7 @@ async function loadConfigById(){
   const raw=(document.getElementById('load-config-input').value||'').trim();
   if(!raw){showToast('Lim inn en konfig-ID først');return;}
   // Kort ID (TRP-XXXX) → hent fra Supabase
-  if(raw.split('-').length <= 2) {
+  if(raw.split('-').length <= 2 || /^(TRP|GBN|MLT)-[A-Z0-9]{4}$/.test(raw)) {
     try {
       showToast('Henter konfigurasjon…');
       const result = await sbLoadConfig(raw);
@@ -3033,7 +3061,7 @@ async function loadConfigById(){
 async function loadConfigByIdW(){
   const raw=(document.getElementById('load-config-input-w').value||'').trim();
   if(!raw){showToast('Lim inn en konfig-ID først');return;}
-  if(raw.split('-').length <= 2) {
+  if(raw.split('-').length <= 2 || /^(TRP|GBN|MLT)-[A-Z0-9]{4}$/.test(raw)) {
     try {
       showToast('Henter konfigurasjon…');
       const result = await sbLoadConfig(raw);
@@ -3368,8 +3396,7 @@ function generateExcel(){
 }
 
 // ─── MULTI-KONFIG ID SYSTEM ───────────────────────────────
-function generateMultiConfigId(){
-  // Serialize all configs — use existing snapshots + current active
+async function generateMultiConfigId(){
   konfigSaveCurrent();
   const payload = _konfigList.map(k => ({
     mode:  k.mode,
@@ -3381,12 +3408,18 @@ function generateMultiConfigId(){
     snapW:     { ...k.snapW },
     snapREPOS: { ...k.snapREPOS },
   }));
-  const json = JSON.stringify({ _multiMode: true, configs: payload });
-  const b64  = btoa(unescape(encodeURIComponent(json)));
-  let hash=0;
-  for(let i=0;i<json.length;i++) hash=((hash<<5)-hash)+json.charCodeAt(i);
-  const chk = Math.abs(hash).toString(36).slice(0,4).toUpperCase().padStart(4,'0');
-  return 'MLT-'+chk+'-'+b64;
+  const state = { _multiMode: true, configs: payload };
+  try {
+    return await sbSaveConfig('MLT', state);
+  } catch(e) {
+    // Fallback til lokal base64 om Supabase feiler
+    const json = JSON.stringify(state);
+    const b64  = btoa(unescape(encodeURIComponent(json)));
+    let hash=0;
+    for(let i=0;i<json.length;i++) hash=((hash<<5)-hash)+json.charCodeAt(i);
+    const chk = Math.abs(hash).toString(36).slice(0,4).toUpperCase().padStart(4,'0');
+    return 'MLT-'+chk+'-'+b64;
+  }
 }
 
 function applySbState(data) {
@@ -3552,7 +3585,7 @@ async function sendStair(){
   }
   const subjCount = _konfigList.length>1 ? ' ('+_konfigList.length+' konfigurasjoner)' : '';
   // Generate multi-ID if multiple configs
-  const displayId = _konfigList.length>1 ? generateMultiConfigId() : configId;
+  const displayId = _konfigList.length>1 ? await generateMultiConfigId() : configId;
   if(_konfigList.length>1){
     // Multi-ID replaces individual ID in body
     body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayId);
@@ -3617,7 +3650,7 @@ async function sendWalk(){
     });
   }
   const subjCountW = _konfigList.length>1 ? ' ('+_konfigList.length+' konfigurasjoner)' : '';
-  const displayIdW = _konfigList.length>1 ? generateMultiConfigId() : configId;
+  const displayIdW = _konfigList.length>1 ? await generateMultiConfigId() : configId;
   if(_konfigList.length>1){
     body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayIdW);
   }
@@ -5266,6 +5299,8 @@ const _HARDCODED_LIBRARY = {
 
 const LIB = (() => {
   const PW        = '405d6335d8f946d0536de22a7f47ba854283e7885aec3fa2b92f202541b1f62e'; // sha256
+  const ADMIN_PW  = '3f83e9ad5be63bd5bf2fd009fffe6b7dd4066243975bc962edc37459c17e65b9'; // sha256 of admin password
+  let adminUnlocked = false;
   const STORE_KEY = 'nlib_v2';
 
   // ── State ──────────────────────────────────────────────
@@ -5309,6 +5344,37 @@ const LIB = (() => {
   }
 
   // ── Login ──────────────────────────────────────────────
+  function openAdminLogin(callback) {
+    _adminCallback = callback;
+    const m = document.getElementById('lib-admin-modal');
+    m.style.display = 'flex';
+    document.getElementById('lib-admin-err').style.display = 'none';
+    setTimeout(() => document.getElementById('lib-admin-input').focus(), 60);
+  }
+  let _adminCallback = null;
+
+  function checkAdminPw() {
+    const raw = document.getElementById('lib-admin-input').value.trim();
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)).then(buf => {
+      const pw = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      if (pw === ADMIN_PW) {
+        adminUnlocked = true;
+        document.getElementById('lib-admin-modal').style.display = 'none';
+        document.getElementById('lib-admin-input').value = '';
+        document.getElementById('lib-admin-err').style.display = 'none';
+        if (_adminCallback) { _adminCallback(); _adminCallback = null; }
+      } else {
+        document.getElementById('lib-admin-err').style.display = 'block';
+        document.getElementById('lib-admin-input').select();
+      }
+    });
+  }
+
+  function requireAdmin(callback) {
+    if (adminUnlocked) { callback(); return; }
+    openAdminLogin(callback);
+  }
+
   function openLogin() {
     document.getElementById('lib-login-modal').classList.add('open');
     setTimeout(() => document.getElementById('lib-pw-input').focus(), 60);
@@ -5587,6 +5653,9 @@ const LIB = (() => {
     save(); render();
   }
   function deleteFolder(name) {
+    requireAdmin(() => _doDeleteFolder(name));
+  }
+  function _doDeleteFolder(name) {
     if (!confirm('Slett «'+name+'»?')) return;
     delete projects[name];
     if (folder===name) { view='root'; folder=null; }
@@ -5595,21 +5664,61 @@ const LIB = (() => {
 
   // ── Model ops ──────────────────────────────────────────
   function uploadFile(file, fname) {
+    requireAdmin(() => _doUpload(file, fname));
+  }
+  async function _doUpload(file, fname) {
     const name = file.name.replace(/\.glb$/i,'');
-    const reader = new FileReader();
-    reader.onload = e => {
-      const b64 = e.target.result; // data:model/gltf-binary;base64,...
+    setStatus('Laster opp: '+name+'…');
+    try {
+      // Last opp til Supabase Storage
+      const filePath = fname + '/' + file.name;
+      const res = await fetch(
+        _SB_URL + '/storage/v1/object/models/' + encodeURIComponent(filePath),
+        {
+          method: 'POST',
+          headers: {
+            'apikey': _SB_KEY,
+            'Authorization': 'Bearer ' + _SB_KEY,
+            'Content-Type': 'application/octet-stream',
+            'x-upsert': 'true'
+          },
+          body: file
+        }
+      );
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error('Opplasting feilet: ' + res.status + ' ' + err);
+      }
+      const publicUrl = _SB_URL + '/storage/v1/object/public/models/' + encodeURIComponent(filePath);
       projects[fname] = (projects[fname]||[]).filter(m=>m.name!==name);
-      projects[fname].push({name, url: b64, embedded: true});
+      projects[fname].push({name, url: publicUrl, embedded: false});
       save(); render();
-      loadModel({name, url: b64});
-    };
-    reader.readAsDataURL(file);
+      loadModel({name, url: publicUrl});
+      setStatus('✓ '+name+' lastet opp');
+    } catch(e) {
+      setStatus('⚠ '+e.message);
+      console.error(e);
+    }
   }
   function deleteModel(fname,idx) {
+    requireAdmin(() => _doDeleteModel(fname,idx));
+  }
+  async function _doDeleteModel(fname,idx) {
     if (!confirm('Fjern modellen?')) return;
     const m = projects[fname][idx];
-    if (m&&m.url) URL.revokeObjectURL(m.url);
+    // Slett fra Supabase Storage hvis det er en Supabase-URL
+    if (m && m.url && m.url.includes('supabase.co')) {
+      try {
+        const filePath = fname + '/' + m.name + '.glb';
+        await fetch(
+          _SB_URL + '/storage/v1/object/models/' + encodeURIComponent(filePath),
+          {
+            method: 'DELETE',
+            headers: { 'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY }
+          }
+        );
+      } catch(e) { console.warn('Kunne ikke slette fra Supabase:', e); }
+    }
     projects[fname].splice(idx,1);
     save(); render();
   }
@@ -6001,7 +6110,7 @@ const LIB = (() => {
     // Mobil-pil rotasjon
     if (mob) mob.style.transform = collapsed ? 'rotate(180deg)' : '';
   }
-  return { enter, exit, checkPw, openLogin, isActive: () => active, unhideAll: _libUnhideAll, toggleCenterPick, toggleCollapse };
+  return { enter, exit, checkPw, checkAdminPw, openLogin, isActive: () => active, unhideAll: _libUnhideAll, toggleCenterPick, toggleCollapse };
 })();
 
 // ── Zoom slider ───────────────────────────────────────────
@@ -6068,9 +6177,10 @@ async function sbSaveConfig(prefix, state) {
 }
 
 async function sbLoadConfig(fullId) {
-  const parts  = fullId.trim().toUpperCase().split('-');
+  const clean = fullId.trim().toUpperCase();
+  const parts  = clean.split('-');
   if (parts.length < 2) throw new Error('Ugyldig ID');
-  const prefix  = parts[0];
+  const prefix  = parts[0]; // TRP, GBN, MLT
   const shortId = parts[1];
 
   const res = await fetch(
@@ -6189,6 +6299,49 @@ function _applyDarkScene(isDark) {
 
 
 
+async function shareConfigStair() {
+  try {
+    showToast('Genererer ID…');
+    let id;
+    if (_konfigList.length > 1) {
+      id = await generateMultiConfigId();
+    } else {
+      const state = {...S, _repos:{...REPOS,
+        reposRailExcluded:[...S.reposRailExcluded]},
+        _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
+      id = await sbSaveConfig('TRP', state);
+    }
+    document.getElementById('s-share-id-display').textContent = id;
+    document.getElementById('s-share-wrap').style.display = '';
+    showToast('🔗 ID klar: ' + id);
+  } catch(e) { showToast('❌ Feil: ' + e.message); }
+}
+
+async function shareConfigWalk() {
+  try {
+    showToast('Genererer ID…');
+    let id;
+    if (_konfigList.length > 1) {
+      id = await generateMultiConfigId();
+    } else {
+      const state = {...W, _mode:'walk'};
+      id = await sbSaveConfig('GBN', state);
+    }
+    document.getElementById('w-share-id-display').textContent = id;
+    document.getElementById('w-share-wrap').style.display = '';
+    showToast('🔗 ID klar: ' + id);
+  } catch(e) { showToast('❌ Feil: ' + e.message); }
+}
+
+function copyShareId(mode) {
+  const el = document.getElementById(mode==='s' ? 's-share-id-display' : 'w-share-id-display');
+  const id = el ? el.textContent.trim() : '';
+  if (!id || id==='—') return;
+  navigator.clipboard.writeText(id)
+    .then(() => showToast('📋 ID kopiert: ' + id))
+    .catch(() => { prompt('Kopier ID-en:', id); });
+}
+
 function goHome() {
   // Exit library if active
   if (typeof LIB !== 'undefined' && LIB.isActive()) LIB.exit();
@@ -6221,11 +6374,29 @@ function goHome() {
       onkeydown="if(event.key==='Enter')LIB.checkPw()">
     <div class="lib-modal-err" id="lib-modal-err">Feil passord</div>
     <button class="lib-modal-btn" onclick="LIB.checkPw()">Logg inn</button>
+    <button onclick="document.getElementById('lib-login-modal').classList.remove('open')"
+      style="width:100%;margin-top:.5rem;padding:.4rem;background:none;border:1px solid var(--border);
+             border-radius:7px;cursor:pointer;font-family:inherit;color:var(--muted);">Avbryt</button>
   </div>
 </div>
 
 <!-- ══ 3D LIBRARY OVERLAY ══ -->
 <button id="lib-toggle-btn" onclick="LIB.toggleCollapse()" title="Skjul/vis bibliotek">&#8250;</button>
+<div id="lib-admin-modal" style="display:none;position:fixed;inset:0;z-index:902;background:rgba(0,0,0,.55);
+  align-items:center;justify-content:center;flex-direction:column;">
+  <div class="lib-modal-box" style="min-width:260px;">
+    <div style="font-weight:700;margin-bottom:.75rem;font-size:.95rem;">🔐 Admin-tilgang</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem;">Skriv inn admin-passord for å laste opp eller slette modeller.</div>
+    <div class="lib-modal-err" id="lib-admin-err">Feil passord</div>
+    <input class="lib-modal-input" id="lib-admin-input" type="password" placeholder="Admin-passord"
+      onkeydown="if(event.key==='Enter')LIB.checkAdminPw()">
+    <button class="lib-modal-btn" onclick="LIB.checkAdminPw()">Bekreft</button>
+    <button onclick="document.getElementById('lib-admin-modal').style.display='none'"
+      style="width:100%;margin-top:.5rem;padding:.4rem;background:none;border:1px solid var(--border);
+             border-radius:7px;cursor:pointer;font-family:inherit;color:var(--muted);">Avbryt</button>
+  </div>
+</div>
+
 <div id="lib-overlay">
   <div id="lib-sidebar">
      <div id="lib-sidebar-header">
