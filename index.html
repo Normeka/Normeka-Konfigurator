@@ -6569,22 +6569,35 @@ var MA = (() => {
     active = true;
     currentStep = 0;
     loadedModels = [];
-    // Skjul gulv/grid i MA-modus
-    scene.traverse(o => { if(o.isGridHelper || (o.isMesh && o.userData.isFloor)) o.visible = false; });
+    // Lukk biblioteket uten å trigge buildWalk/buildStair
+    const overlay = document.getElementById('lib-overlay');
+    if(overlay) overlay.classList.remove('lib-open');
+    const toggleBtn = document.getElementById('lib-toggle-btn');
+    if(toggleBtn) { toggleBtn.style.display='none'; toggleBtn.classList.remove('lib-open'); }
+    // Rydd scenen
+    if(typeof clearGrp === 'function') clearGrp();
+    // Skjul gulv/grid
+    scene.traverse(o => { if(o.isGridHelper) o.visible = false; });
     document.getElementById('ma-overlay').style.display = '';
+    // Oppdater canvas-hint
+    const hint = document.getElementById('canvas-hint');
+    if(hint) hint.textContent = '🔧 Monteringsanvisning · Rotér og zoom fritt · Bruk pilene for å navigere';
     _loadStep(0);
     _updateUI();
   }
 
   function close() {
     active = false;
-    // Fjern MA-modeller
     loadedModels.forEach(m => scene.remove(m));
     loadedModels = [];
     if(_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
-    // Vis gulv/grid igjen
-    scene.traverse(o => { if(o.isGridHelper || (o.isMesh && o.userData.isFloor)) o.visible = true; });
+    scene.traverse(o => { if(o.isGridHelper) o.visible = true; });
     document.getElementById('ma-overlay').style.display = 'none';
+    // Gjenbygg gjeldende modus
+    if(typeof currentMode !== 'undefined') {
+      if(currentMode === 'stair') buildStair();
+      else buildWalk();
+    }
     if(typeof renderer !== 'undefined') renderer.render(scene, cam);
   }
 
@@ -6760,7 +6773,7 @@ function goHome() {
          style="display:none;width:100%;padding:.38rem .6rem;background:#eaf2f7;border:1px solid var(--nblue);border-radius:6px;color:var(--nblue);font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;text-align:left;">
          👁 Vis alle (0)
        </button>
-       <button onclick="LIB.exit(); MA.open();"
+       <button onclick="MA.open();"
          style="width:100%;padding:.38rem .6rem;background:linear-gradient(135deg,#0f1922,#1a2b3c);
                 border:1px solid #f19d0d;border-radius:6px;color:#f19d0d;font-size:.78rem;
                 font-weight:700;cursor:pointer;font-family:inherit;text-align:center;
