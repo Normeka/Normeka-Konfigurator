@@ -362,9 +362,11 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
 }
 #ma-panel {
   position: absolute;
-  bottom: 1.2rem;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 1rem;
+  right: 1rem;
+  left: auto;
+  transform: none;
+  max-width: 280px;
   background: rgba(15,25,34,.92);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255,255,255,.12);
@@ -435,17 +437,7 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
 }
 .ma-dot.active { background: #f19d0d; }
 .ma-dot.done   { background: rgba(255,255,255,.55); }
-#ma-close {
-  position: absolute;
-  top: .6rem; right: .8rem;
-  background: none;
-  border: none;
-  color: rgba(255,255,255,.5);
-  font-size: 1rem;
-  cursor: pointer;
-  padding: .2rem;
-}
-#ma-close:hover { color: #fff; }
+
 @keyframes ma-slide-in {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -907,21 +899,26 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
 </div>
 <div id="ma-overlay" style="display:none;">
   <div id="ma-panel">
-    <button id="ma-close" onclick="MA.close()" title="Avslutt monteringsanvisning">✕</button>
-    <div id="ma-step-label">Steg 1 av 7</div>
-    <div id="ma-step-title">Gangbaneramme</div>
-    <div id="ma-step-desc">Profilene kappes til ønsket lengde og bredde.</div>
-    <div id="ma-controls">
-      <button class="ma-btn" id="ma-btn-prev" onclick="MA.prev()">← Forrige</button>
-      <button class="ma-btn ma-btn-next" id="ma-btn-next" onclick="MA.next()">Neste →</button>
-      <div id="ma-progress"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem;">
+      <button id="ma-toggle" onclick="MA.togglePanel()"
+        style="background:none;border:none;color:rgba(255,255,255,.5);font-size:.8rem;cursor:pointer;padding:.1rem .3rem;"
+        title="Minimer panel">▲</button>
+      <button onclick="MA.close()" title="Avslutt"
+        style="background:rgba(231,76,60,.25);border:1px solid rgba(231,76,60,.5);color:#e74c3c;
+               border-radius:6px;padding:.2rem .6rem;font-size:.75rem;cursor:pointer;font-family:Barlow,sans-serif;">
+        ✕ Avslutt
+      </button>
     </div>
-    <button onclick="MA.close()"
-      style="width:100%;margin-top:.6rem;padding:.38rem;background:rgba(255,255,255,.08);
-             border:1px solid rgba(255,255,255,.2);border-radius:7px;color:rgba(255,255,255,.7);
-             font-family:Barlow,sans-serif;font-size:.78rem;cursor:pointer;">
-      ✕ Avslutt monteringsanvisning
-    </button>
+    <div id="ma-panel-body">
+      <div id="ma-step-label">Steg 1 av 7</div>
+      <div id="ma-step-title">Gangbaneramme</div>
+      <div id="ma-step-desc">Profilene kappes til ønsket lengde og bredde.</div>
+      <div id="ma-controls">
+        <button class="ma-btn" id="ma-btn-prev" onclick="MA.prev()">← Forrige</button>
+        <button class="ma-btn ma-btn-next" id="ma-btn-next" onclick="MA.next()">Neste →</button>
+        <div id="ma-progress"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -6594,20 +6591,14 @@ var MA = (() => {
   function close() {
     active = false;
     if(_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
-    // Rydd alle MA-modeller fra scenen
     loadedModels.forEach(m => { try { scene.remove(m); } catch(e){} });
     loadedModels = [];
-    // Vis grid igjen
     scene.traverse(o => { if(o.isGridHelper) o.visible = true; });
-    // Skjul overlay
     const ov = document.getElementById('ma-overlay');
     if(ov) ov.style.display = 'none';
-    // Gjenbygg gjeldende modus
-    if(typeof currentMode !== 'undefined') {
-      if(currentMode === 'stair') buildStair();
-      else buildWalk();
-    }
     if(typeof renderer !== 'undefined') renderer.render(scene, cam);
+    // Gå til startmeny
+    if(typeof goHome === 'function') goHome();
   }
 
   function next() {
@@ -6634,22 +6625,26 @@ var MA = (() => {
         loader = new THREE.GLTFLoader();
       else return;
     }
-    let loaded = 0;
-    for(let i = 0; i <= targetStep; i++) {
-      const url = SB_BASE + STEPS[i].file;
-      const isLast = (i === targetStep);
+    // Last sekvensielt — én om gangen for å unngå race condition
+    let i = 0;
+    function loadNext() {
+      if(i > targetStep) {
+        if(typeof renderer !== 'undefined') renderer.render(scene, cam);
+        return;
+      }
+      const idx = i++;
+      const url = SB_BASE + STEPS[idx].file;
+      const isLast = (idx === targetStep);
       loader.load(url, gltf => {
-        const model = gltf.scene;
-        _setModelMat(model, isLast ? MAT_BLUE : MAT_GREY);
-        // Ingen animasjon ved re-load
-        model.userData.animating = false;
-        scene.add(model);
-        loadedModels.push(model);
-        loaded++;
-        if(loaded === targetStep + 1 && typeof renderer !== 'undefined')
-          renderer.render(scene, cam);
-      }, null, err => console.warn('MA reload feil:', err));
+        const m = gltf.scene;
+        _setModelMat(m, isLast ? MAT_BLUE : MAT_GREY);
+        m.userData.animating = false;
+        scene.add(m);
+        loadedModels.push(m);
+        loadNext();
+      }, null, err => { console.warn('MA reload feil:', err); loadNext(); });
     }
+    loadNext();
   }
 
   const MAT_GREY = new THREE.MeshLambertMaterial({ color: 0x8a9bb0 });
@@ -6742,7 +6737,16 @@ var MA = (() => {
     ).join('');
   }
 
-  return { open, close, next, prev, isActive: () => active };
+  let _panelCollapsed = false;
+  function togglePanel() {
+    _panelCollapsed = !_panelCollapsed;
+    const body = document.getElementById('ma-panel-body');
+    const btn  = document.getElementById('ma-toggle');
+    if(body) body.style.display = _panelCollapsed ? 'none' : '';
+    if(btn)  btn.textContent = _panelCollapsed ? '▼' : '▲';
+  }
+
+  return { open, close, next, prev, togglePanel, isActive: () => active };
 })();
 
 function goHome() {
