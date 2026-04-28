@@ -6610,12 +6610,22 @@ var MA = (() => {
 
   function prev() {
     if(currentStep <= 0) return;
-    // Fjern siste modell
     const last = loadedModels.pop();
     if(last) scene.remove(last);
     currentStep--;
+    // Gjør ny siste modell blå
+    if(loadedModels.length > 0) {
+      loadedModels.forEach((m,i) => _setModelMat(m, i===loadedModels.length-1 ? MAT_BLUE : MAT_GREY));
+    }
     _updateUI();
     if(typeof renderer !== 'undefined') renderer.render(scene, cam);
+  }
+
+  const MAT_GREY = new THREE.MeshLambertMaterial({ color: 0x8a9bb0 });
+  const MAT_BLUE = new THREE.MeshLambertMaterial({ color: 0x2d8ccc, emissive: 0x0d3a5c, emissiveIntensity: 0.35 });
+
+  function _setModelMat(model, mat) {
+    model.traverse(o => { if(o.isMesh) o.material = mat; });
   }
 
   function _loadStep(stepIdx) {
@@ -6627,34 +6637,37 @@ var MA = (() => {
     const step = STEPS[stepIdx];
     const url  = SB_BASE + step.file;
 
+    // Gjør alle eksisterende modeller grå
+    loadedModels.forEach(m => _setModelMat(m, MAT_GREY));
+
     loader.load(url, gltf => {
       const model = gltf.scene;
-      const mat = new THREE.MeshLambertMaterial({ color: 0x8a9bb0 });
-      model.traverse(o => { if(o.isMesh) o.material = mat; });
+      // Ny komponent er blå (aktiv)
+      _setModelMat(model, MAT_BLUE);
 
-      // Finn bounding box for å sentrere
+      // Finn bounding box
       const box = new THREE.Box3().setFromObject(model);
       const center = new THREE.Vector3();
       box.getCenter(center);
+      const size = new THREE.Vector3();
+      box.getSize(size);
 
-      // Start offset på X-aksen (glider inn fra siden)
-      const startX = model.position.x - 6.0;
-      model.position.x = startX;
-      model.userData.targetX = model.position.x + 6.0;
+      // Animér inn langs world Y-aksen (ovenfra)
+      const startY = model.position.y + size.y * 3;
+      model.position.y = startY;
+      model.userData.targetY = model.position.y - size.y * 3;
       model.userData.animating = true;
 
       scene.add(model);
       loadedModels.push(model);
 
-      // Fit kamera ved første steg
-      if(stepIdx === 0) {
-        if(typeof orbitTarget !== 'undefined') orbitTarget.copy(center);
-        if(typeof radius !== 'undefined') {
-          const size = new THREE.Vector3();
-          box.getSize(size);
-          radius = Math.max(size.x, size.y, size.z) * 2.2;
-          if(typeof ucam === 'function') ucam();
-        }
+      // Flytt kamera-fokus til ny komponents senter
+      if(typeof orbitTarget !== 'undefined') {
+        orbitTarget.copy(center);
+      }
+      if(stepIdx === 0 && typeof radius !== 'undefined') {
+        radius = Math.max(size.x, size.y, size.z) * 2.5;
+        if(typeof ucam === 'function') ucam();
       }
 
       _animate();
@@ -6669,12 +6682,12 @@ var MA = (() => {
     _animFrame = requestAnimationFrame(() => {
       let stillAnimating = false;
       for(const m of animating) {
-        const diff = m.userData.targetX - m.position.x;
-        if(Math.abs(diff) < 0.002) {
-          m.position.x = m.userData.targetX;
+        const diff = m.userData.targetY - m.position.y;
+        if(Math.abs(diff) < 0.003) {
+          m.position.y = m.userData.targetY;
           m.userData.animating = false;
         } else {
-          m.position.x += diff * 0.12; // ease-out
+          m.position.y += diff * 0.055; // saktere ease-out (50% av 0.12)
           stillAnimating = true;
         }
       }
