@@ -354,95 +354,16 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
 
 /* ── Loading screen ─────────────────────────────────────── */
 /* ── Monteringsanvisning ── */
-#ma-overlay {
-  position: absolute;
-  top: 0; bottom: 0; left: 0; right: 0;
-  z-index: 60;
-  pointer-events: none;
-}
-#ma-panel {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  left: auto;
-  transform: none;
-  max-width: 280px;
-  background: rgba(15,25,34,.92);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 14px;
-  padding: .85rem 1.2rem;
-  min-width: 320px;
-  max-width: 90vw;
-  color: #fff;
-  font-family: 'Barlow', sans-serif;
-  pointer-events: all;
-  box-shadow: 0 8px 32px rgba(0,0,0,.4);
-}
-#ma-step-label {
-  font-size: .68rem;
-  font-weight: 700;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-  color: #f19d0d;
-  margin-bottom: .25rem;
-}
-#ma-step-title {
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: .3rem;
-}
-#ma-step-desc {
-  font-size: .8rem;
-  color: rgba(255,255,255,.7);
-  line-height: 1.5;
-  margin-bottom: .75rem;
-}
-#ma-controls {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-}
-.ma-btn {
-  background: rgba(255,255,255,.1);
-  border: 1px solid rgba(255,255,255,.2);
-  color: #fff;
-  border-radius: 8px;
-  padding: .4rem .9rem;
-  font-family: 'Barlow', sans-serif;
-  font-size: .82rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .15s;
-}
-.ma-btn:hover { background: rgba(255,255,255,.2); }
-.ma-btn:disabled { opacity: .35; cursor: default; }
-.ma-btn-next {
-  background: #f19d0d;
-  border-color: #f19d0d;
-  color: #1a1a18;
-  flex: 1;
-}
-.ma-btn-next:hover { background: #fdb030; }
-#ma-progress {
-  display: flex;
-  gap: 5px;
-  margin-left: auto;
-}
+/* MA progress dots */
 .ma-dot {
-  width: 7px; height: 7px;
+  width: 8px; height: 8px;
   border-radius: 50%;
-  background: rgba(255,255,255,.25);
+  background: var(--border2);
   transition: background .2s;
+  flex-shrink: 0;
 }
-.ma-dot.active { background: #f19d0d; }
-.ma-dot.done   { background: rgba(255,255,255,.55); }
-
-@keyframes ma-slide-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-#ma-panel { animation: ma-slide-in .3s ease; }
+.ma-dot.active { background: var(--nyellow); }
+.ma-dot.done   { background: var(--nblue); }
 
 /* ── 3D viewport click ripple ── */
 @keyframes viewport-ripple {
@@ -6706,12 +6627,22 @@ var MA = (() => {
       loadedModels.push(model);
 
       // Flytt kamera-fokus og zoom inn på ny komponent
-      if(typeof orbitTarget !== 'undefined') orbitTarget.copy(center);
+      if(typeof orbitTarget !== 'undefined') {
+        orbitTarget.set(center.x, center.y, center.z);
+      }
+      // Beregn radius basert på hele akkumulert bounding box
+      const allBox = new THREE.Box3();
+      loadedModels.forEach(m => allBox.expandByObject(m));
+      const allSize = new THREE.Vector3();
+      allBox.getSize(allSize);
+      const allCenter = new THREE.Vector3();
+      allBox.getCenter(allCenter);
+      if(typeof orbitTarget !== 'undefined') orbitTarget.copy(allCenter);
       if(typeof radius !== 'undefined') {
-        const targetR = Math.max(size.x, size.y, size.z) * 2.2;
-        radius = targetR;
+        radius = Math.max(allSize.x, allSize.y, allSize.z) * 1.8;
         if(typeof ucam === 'function') ucam();
       }
+      if(typeof renderer !== 'undefined') renderer.render(scene, cam);
 
       _animate();
     }, null, err => console.warn('MA load feil:', err));
