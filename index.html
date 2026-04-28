@@ -353,18 +353,6 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
 
 
 /* ── Loading screen ─────────────────────────────────────── */
-/* ── Monteringsanvisning ── */
-/* MA progress dots */
-.ma-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--border2);
-  transition: background .2s;
-  flex-shrink: 0;
-}
-.ma-dot.active { background: var(--nyellow); }
-.ma-dot.done   { background: var(--nblue); }
-
 /* ── 3D viewport click ripple ── */
 @keyframes viewport-ripple {
   0%   { transform:translate(-50%,-50%) scale(0); opacity:.5; }
@@ -578,11 +566,9 @@ body.dark-mode .vp-ripple { border-color: rgba(241,157,13,.5); }
 #lib-close-btn:hover { background: var(--surface2); }
 #lib-body {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  -webkit-overflow-scrolling: touch;
 }
 /* Login modal */
 #lib-login-modal {
@@ -1089,20 +1075,6 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       </div>
 
       <div class="ss">
-        <div class="st sa">🔗 Del konfigurasjon</div>
-        <div style="font-size:.74rem;color:var(--muted);margin-bottom:.5rem;">Generer en kort ID du kan dele med kolleger. De limer den inn for å hente opp nøyaktig samme konfigurasjon.</div>
-        <button class="obtn obs" style="background:var(--surface2);color:var(--nblue);border:1.5px solid var(--nblue);" onclick="shareConfigStair()">🔗 Generer delelink →</button>
-        <div id="s-share-wrap" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:#eaf2f7;border-radius:7px;border:1px solid var(--nblue);">
-          <div style="font-size:.65rem;font-weight:700;color:var(--nblue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem;">Del denne ID-en</div>
-          <div style="display:flex;align-items:center;gap:.5rem;">
-            <div style="font-family:monospace;font-size:1rem;font-weight:700;color:var(--nblue);flex:1;letter-spacing:.05em;" id="s-share-id-display">—</div>
-            <button onclick="copyShareId('s')" style="flex-shrink:0;padding:.3rem .7rem;background:var(--nblue);color:#fff;border:none;border-radius:5px;font-size:.78rem;cursor:pointer;font-weight:600;">📋 Kopier</button>
-          </div>
-          <div style="font-size:.68rem;color:var(--muted);margin-top:.3rem;">Gyldig i 90 dager · Ingen e-post nødvendig</div>
-        </div>
-      </div>
-
-      <div class="ss">
         <div class="st sa">Last inn konfigurasjon</div>
         <div class="ff"><label>Konfigurasjon-ID</label><input type="text" id="load-config-input" placeholder="TRP-XXXX" style="font-family:monospace;font-size:.8rem;"></div>
         <button class="obtn obs" style="background:var(--surface2);color:var(--nblue);border:1.5px solid var(--nblue);" onclick="loadConfigById()">Last inn konfigurasjon →</button>
@@ -1276,20 +1248,6 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       </div>
 
       <div class="ss">
-        <div class="st wa">🔗 Del konfigurasjon</div>
-        <div style="font-size:.74rem;color:var(--muted);margin-bottom:.5rem;">Generer en kort ID du kan dele med kolleger.</div>
-        <button class="obtn obw" style="background:var(--surface2);color:var(--ngreen);border:1.5px solid var(--ngreen);" onclick="shareConfigWalk()">🔗 Generer delelink →</button>
-        <div id="w-share-wrap" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:#f3f8ec;border-radius:7px;border:1px solid var(--ngreen);">
-          <div style="font-size:.65rem;font-weight:700;color:var(--ngreen);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem;">Del denne ID-en</div>
-          <div style="display:flex;align-items:center;gap:.5rem;">
-            <div style="font-family:monospace;font-size:1rem;font-weight:700;color:var(--ngreen);flex:1;letter-spacing:.05em;" id="w-share-id-display">—</div>
-            <button onclick="copyShareId('w')" style="flex-shrink:0;padding:.3rem .7rem;background:var(--ngreen);color:#fff;border:none;border-radius:5px;font-size:.78rem;cursor:pointer;font-weight:600;">📋 Kopier</button>
-          </div>
-          <div style="font-size:.68rem;color:var(--muted);margin-top:.3rem;">Gyldig i 90 dager · Ingen e-post nødvendig</div>
-        </div>
-      </div>
-
-      <div class="ss">
         <div class="st wa">Last inn konfigurasjon</div>
         <div class="ff"><label>Konfigurasjon-ID</label><input type="text" id="load-config-input-w" placeholder="GBN-XXXX" style="font-family:monospace;font-size:.8rem;"></div>
         <button class="obtn obw" style="background:var(--surface2);color:var(--ngreen);border:1.5px solid var(--ngreen);" onclick="loadConfigByIdW()">Last inn konfigurasjon →</button>
@@ -1298,48 +1256,9 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
           <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">Én fane per konfigurasjon — klar for ERP-import</div>
         </div>
       </div>
-  <!-- ══ MA PANEL ══ -->
-  <div class="config-panel" id="mapanel">
-    <div class="ss" style="border-bottom:1px solid var(--border);padding-bottom:.8rem;margin-bottom:.6rem;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
-        <div style="flex:1;">
-          <div style="font-size:.65rem;font-weight:700;color:var(--nyellow);text-transform:uppercase;letter-spacing:.12em;" id="ma-step-label">Steg 1 av 7</div>
-          <div style="font-size:1.05rem;font-weight:700;color:var(--text);margin-top:.15rem;" id="ma-step-title">Gangbaneramme</div>
-        </div>
-        <div id="ma-progress" style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:80px;"></div>
-      </div>
     </div>
-    <div class="ss">
-      <div id="ma-step-desc" style="font-size:.82rem;color:var(--muted);line-height:1.65;"></div>
-    </div>
-    <div class="ss" style="display:flex;flex-direction:column;gap:.5rem;">
-      <div style="display:flex;gap:.5rem;">
-        <button id="ma-btn-prev" onclick="MA.prev()"
-          style="flex:1;padding:.45rem .5rem;background:var(--surface2);border:1.5px solid var(--border);
-                 border-radius:8px;color:var(--text);font-family:Barlow,sans-serif;font-size:.82rem;
-                 font-weight:600;cursor:pointer;">← Forrige</button>
-        <button id="ma-btn-next" onclick="MA.next()"
-          style="flex:2;padding:.45rem .5rem;background:var(--nyellow);border:1.5px solid var(--nyellow);
-                 border-radius:8px;color:#1a1a18;font-family:Barlow,sans-serif;font-size:.82rem;
-                 font-weight:700;cursor:pointer;">Neste steg →</button>
-      </div>
-      <button onclick="MA.close()"
-        style="width:100%;padding:.42rem;background:#fff;border:1.5px solid #e74c3c;border-radius:8px;
-               color:#e74c3c;font-family:Barlow,sans-serif;font-size:.82rem;font-weight:600;cursor:pointer;">
-        ✕ Avslutt monteringsanvisning
-      </button>
-    </div>
-    <div class="ss">
-      <div style="font-size:.7rem;color:var(--muted);text-align:center;line-height:1.5;">
-        Roter og zoom fritt i 3D-visningen<br>
-        🔵 Blå komponent = aktivt monteringssteg
-      </div>
-    </div>
-  </div>
-
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
 
 <script>
@@ -2603,14 +2522,10 @@ function switchMode(m){
   dimActive = false;
   document.getElementById('dim-overlay').style.display = 'none';
   document.getElementById('dim-lines').innerHTML = '';
-  document.getElementById('mapanel').classList.toggle('visible', m==='ma');
   if(m==='walk'){ if(!switchMode._skipReset){WalkSegs.length=0; walkSegNextId=1;} walkDimActive=false; document.getElementById('btn-walk-dim').classList.remove('vt-active'); setView('3d');
     document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Legg til seksjoner i sidepanelet'; }
-  else if(m==='ma') { document.getElementById('canvas-hint').textContent='🔵 Blå = aktivt steg · Roter og zoom fritt'; }
   else { document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Klikk for mål'; }
-  if(m==='stair') buildStair();
-  else if(m==='walk') buildWalk();
-  // MA: ikke bygg noe — MA.open() håndterer scenen
+  m==='stair'?buildStair():buildWalk();
   if(m==='walk') setTimeout(initSketchIfNeeded, 50);
 }
 
@@ -3036,7 +2951,7 @@ function applyStairState(data){
   document.getElementById('f2-controls').style.display=S.f2independent?'block':'none';
   document.getElementById('r90-positions').style.display=(S.type==='r90r'||S.type==='r90l')?'block':'none';
   document.getElementById('r180-positions').style.display=S.type==='r180'?'block':'none';
-  document.getElementById('f2-offset-row').style.display=S.type==='r180'?'block':'none';
+  document.getElementById('f2-offset-row').style.display='none'; // now inside r180-positions
   if(isRepos && REPOS.breddeMm){
     document.getElementById('s-rb').value=REPOS.breddeMm; document.getElementById('v-rb').textContent=REPOS.breddeMm+' mm';
     document.getElementById('s-rd').value=REPOS.dybdeMm;  document.getElementById('v-rd').textContent=REPOS.dybdeMm+' mm';
@@ -3102,7 +3017,7 @@ async function loadConfigById(){
   const raw=(document.getElementById('load-config-input').value||'').trim();
   if(!raw){showToast('Lim inn en konfig-ID først');return;}
   // Kort ID (TRP-XXXX) → hent fra Supabase
-  if(raw.split('-').length <= 2 || /^(TRP|GBN|MLT)-[A-Z0-9]{4}$/.test(raw)) {
+  if(raw.split('-').length <= 2) {
     try {
       showToast('Henter konfigurasjon…');
       const result = await sbLoadConfig(raw);
@@ -3118,7 +3033,7 @@ async function loadConfigById(){
 async function loadConfigByIdW(){
   const raw=(document.getElementById('load-config-input-w').value||'').trim();
   if(!raw){showToast('Lim inn en konfig-ID først');return;}
-  if(raw.split('-').length <= 2 || /^(TRP|GBN|MLT)-[A-Z0-9]{4}$/.test(raw)) {
+  if(raw.split('-').length <= 2) {
     try {
       showToast('Henter konfigurasjon…');
       const result = await sbLoadConfig(raw);
@@ -3453,7 +3368,8 @@ function generateExcel(){
 }
 
 // ─── MULTI-KONFIG ID SYSTEM ───────────────────────────────
-async function generateMultiConfigId(){
+function generateMultiConfigId(){
+  // Serialize all configs — use existing snapshots + current active
   konfigSaveCurrent();
   const payload = _konfigList.map(k => ({
     mode:  k.mode,
@@ -3465,18 +3381,12 @@ async function generateMultiConfigId(){
     snapW:     { ...k.snapW },
     snapREPOS: { ...k.snapREPOS },
   }));
-  const state = { _multiMode: true, configs: payload };
-  try {
-    return await sbSaveConfig('MLT', state);
-  } catch(e) {
-    // Fallback til lokal base64 om Supabase feiler
-    const json = JSON.stringify(state);
-    const b64  = btoa(unescape(encodeURIComponent(json)));
-    let hash=0;
-    for(let i=0;i<json.length;i++) hash=((hash<<5)-hash)+json.charCodeAt(i);
-    const chk = Math.abs(hash).toString(36).slice(0,4).toUpperCase().padStart(4,'0');
-    return 'MLT-'+chk+'-'+b64;
-  }
+  const json = JSON.stringify({ _multiMode: true, configs: payload });
+  const b64  = btoa(unescape(encodeURIComponent(json)));
+  let hash=0;
+  for(let i=0;i<json.length;i++) hash=((hash<<5)-hash)+json.charCodeAt(i);
+  const chk = Math.abs(hash).toString(36).slice(0,4).toUpperCase().padStart(4,'0');
+  return 'MLT-'+chk+'-'+b64;
 }
 
 function applySbState(data) {
@@ -3642,7 +3552,7 @@ async function sendStair(){
   }
   const subjCount = _konfigList.length>1 ? ' ('+_konfigList.length+' konfigurasjoner)' : '';
   // Generate multi-ID if multiple configs
-  const displayId = _konfigList.length>1 ? await generateMultiConfigId() : configId;
+  const displayId = _konfigList.length>1 ? generateMultiConfigId() : configId;
   if(_konfigList.length>1){
     // Multi-ID replaces individual ID in body
     body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayId);
@@ -3707,7 +3617,7 @@ async function sendWalk(){
     });
   }
   const subjCountW = _konfigList.length>1 ? ' ('+_konfigList.length+' konfigurasjoner)' : '';
-  const displayIdW = _konfigList.length>1 ? await generateMultiConfigId() : configId;
+  const displayIdW = _konfigList.length>1 ? generateMultiConfigId() : configId;
   if(_konfigList.length>1){
     body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayIdW);
   }
@@ -5356,9 +5266,7 @@ const _HARDCODED_LIBRARY = {
 
 const LIB = (() => {
   const PW        = '405d6335d8f946d0536de22a7f47ba854283e7885aec3fa2b92f202541b1f62e'; // sha256
-  const ADMIN_PW  = '3f83e9ad5be63bd5bf2fd009fffe6b7dd4066243975bc962edc37459c17e65b9'; // sha256 of admin password
-  let adminUnlocked = false;
-  let _libSynced = false;
+  const ADMIN_PW  = '3f83e9ad5be63bd5bf2fd009fffe6b7dd4066243975bc962edc37459c17e65b9'; // sha256('1992')
   const STORE_KEY = 'nlib_v2';
 
   // ── State ──────────────────────────────────────────────
@@ -5372,83 +5280,48 @@ const LIB = (() => {
 
   // ── Persist ────────────────────────────────────────────
   function save() {
-    // Lokal backup (kun mappenavn, ikke modelldata)
     try {
-      const light = {};
-      for (const [k,v] of Object.entries(projects)) {
-        light[k] = v.filter(m=>!m.embedded).map(m=>({name:m.name,url:m.url}));
-      }
-      localStorage.setItem(STORE_KEY, JSON.stringify(light));
-    } catch(e) {}
-  }
-
-  async function syncFromSupabase() {
-    try {
-      const res = await fetch(_SB_URL + '/rest/v1/library?select=folder,model_name,url&order=created_at.asc', {
-        headers: _SB_HDRS
-      });
-      if (!res.ok) {
-        console.error('Supabase library henting feilet:', res.status, await res.text());
-        return;
-      }
-      const rows = await res.json();
-      for (const row of rows) {
-        if (!projects[row.folder]) projects[row.folder] = [];
-        if (!projects[row.folder].find(m => m.name===row.model_name)) {
-          projects[row.folder].push({ name: row.model_name, url: row.url, embedded: false });
-        }
-      }
-      // Kun render hvis vi er i root-visning (ikke forstyrr pågående operasjoner)
-      if (typeof render === 'function') render();
-    } catch(e) { console.error('Supabase library sync feilet:', e); }
-  }
-
-  async function sbSaveLibraryEntry(folder, modelName, url) {
-    const res = await fetch(_SB_URL + '/rest/v1/library', {
-      method: 'POST',
-      headers: { ..._SB_HDRS, 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ folder, model_name: modelName, url })
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      console.error('sbSaveLibraryEntry feil:', res.status, err);
-      throw new Error('Kunne ikke lagre i bibliotek: ' + res.status);
+      // Store full base64 data so models persist across sessions
+      localStorage.setItem(STORE_KEY, JSON.stringify(projects));
+    } catch(e) {
+      // localStorage might be full with large base64 data
+      console.warn('Library save failed — models may not persist:', e);
     }
   }
-
-  async function sbDeleteLibraryEntry(folder, modelName) {
-    await fetch(_SB_URL + '/rest/v1/library?folder=eq.' + encodeURIComponent(folder) + '&model_name=eq.' + encodeURIComponent(modelName), {
-      method: 'DELETE',
-      headers: _SB_HDRS
-    });
-  }
-
-  async function sbDeleteFolder(folderName) {
-    await fetch(_SB_URL + '/rest/v1/library?folder=eq.' + encodeURIComponent(folderName), {
-      method: 'DELETE',
-      headers: _SB_HDRS
-    });
-  }
-
   function load() {
-    // Last hardkodede modeller
+    // First load hardcoded models (baked into HTML by Claude)
     for (const [k,v] of Object.entries(_HARDCODED_LIBRARY)) {
       projects[k] = [...v];
     }
-    // Synk fra Supabase (asynkront, kun ved oppstart)
-    if (!_libSynced) { _libSynced = true; syncFromSupabase(); }
+    // Then merge localStorage (user-uploaded models in this browser)
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const m = JSON.parse(raw);
+      for (const [k,v] of Object.entries(m)) {
+        if (!projects[k]) projects[k] = [];
+        v.forEach(item => {
+          if (!projects[k].find(p => p.name===item.name)) {
+            projects[k].push(item);
+          }
+        });
+      }
+    } catch(e) {}
   }
 
   // ── Login ──────────────────────────────────────────────
-  function openAdminLogin(callback) {
+  let _adminCallback = null;
+
+  function requireAdmin(callback) {
     _adminCallback = callback;
     const m = document.getElementById('lib-admin-modal');
-    m.style.setProperty('display', 'flex', 'important');
-    document.getElementById('lib-admin-err').style.display = 'none';
-    document.getElementById('lib-admin-input').value = '';
-    setTimeout(() => document.getElementById('lib-admin-input').focus(), 60);
+    if(m) {
+      m.style.setProperty('display','flex','important');
+      document.getElementById('lib-admin-err').style.display = 'none';
+      document.getElementById('lib-admin-input').value = '';
+      setTimeout(() => document.getElementById('lib-admin-input').focus(), 60);
+    }
   }
-  let _adminCallback = null;
 
   function checkAdminPw() {
     const raw = document.getElementById('lib-admin-input').value.trim();
@@ -5457,20 +5330,12 @@ const LIB = (() => {
       if (pw === ADMIN_PW) {
         document.getElementById('lib-admin-modal').style.removeProperty('display');
         document.getElementById('lib-admin-input').value = '';
-        document.getElementById('lib-admin-err').style.display = 'none';
-        if (_adminCallback) {
-          const cb = _adminCallback; _adminCallback = null;
-          cb(); // adminUnlocked forblir false — spørres hver gang
-        }
+        if (_adminCallback) { const cb = _adminCallback; _adminCallback = null; cb(); }
       } else {
         document.getElementById('lib-admin-err').style.display = 'block';
         document.getElementById('lib-admin-input').select();
       }
     });
-  }
-
-  function requireAdmin(callback) {
-    openAdminLogin(callback); // alltid spør om passord
   }
 
   function openLogin() {
@@ -5740,9 +5605,7 @@ const LIB = (() => {
     const n = (prompt('Mappenavn:', 'Prosjekt '+(Object.keys(projects).length+1))||'').trim();
     if (!n) return;
     if (projects[n]) { alert('Finnes allerede.'); return; }
-    requireAdmin(() => {
-      projects[n] = []; save(); render();
-    });
+    requireAdmin(() => { projects[n] = []; save(); render(); });
   }
   function renameFolder(old) {
     const n = (prompt('Nytt navn:', old)||'').trim();
@@ -5753,89 +5616,37 @@ const LIB = (() => {
     save(); render();
   }
   function deleteFolder(name) {
-    requireAdmin(() => _doDeleteFolder(name));
-  }
-  async function _doDeleteFolder(name) {
-    if (!confirm('Slett «'+name+'»?')) return;
-    // Slett filer fra Storage og library-tabell
-    const mods = projects[name] || [];
-    for (const m of mods) {
-      if (m.url && m.url.includes('supabase.co')) {
-        try {
-          const filePath = name + '/' + m.name + '.glb';
-          await fetch(_SB_URL + '/storage/v1/object/models/' + encodeURIComponent(filePath),
-            { method: 'DELETE', headers: { 'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY } });
-        } catch(e) {}
-      }
-    }
-    await sbDeleteFolder(name);
-    delete projects[name];
-    if (folder===name) { view='root'; folder=null; }
-    save(); render();
+    requireAdmin(() => {
+      if (!confirm('Slett «'+name+'»?')) return;
+      delete projects[name];
+      if (folder===name) { view='root'; folder=null; }
+      save(); render();
+    });
   }
 
   // ── Model ops ──────────────────────────────────────────
   function uploadFile(file, fname) {
-    requireAdmin(() => _doUpload(file, fname));
-  }
-  async function _doUpload(file, fname) {
-    const name = file.name.replace(/\.glb$/i,'');
-    setStatus('Laster opp: '+name+'…');
-    try {
-      // Last opp til Supabase Storage
-      const filePath = fname + '/' + file.name;
-      const res = await fetch(
-        _SB_URL + '/storage/v1/object/models/' + encodeURIComponent(filePath),
-        {
-          method: 'POST',
-          headers: {
-            'apikey': _SB_KEY,
-            'Authorization': 'Bearer ' + _SB_KEY,
-            'Content-Type': 'application/octet-stream',
-            'x-upsert': 'true'
-          },
-          body: file
-        }
-      );
-      if (!res.ok) {
-        const err = await res.text();
-        console.error('Storage upload feil:', res.status, err);
-        throw new Error('Opplasting feilet (' + res.status + '): ' + err.slice(0,120));
-      }
-      const publicUrl = _SB_URL + '/storage/v1/object/public/models/' + encodeURIComponent(filePath);
-      projects[fname] = (projects[fname]||[]).filter(m=>m.name!==name);
-      projects[fname].push({name, url: publicUrl, embedded: false});
-      await sbSaveLibraryEntry(fname, name, publicUrl);
-      save(); render();
-      loadModel({name, url: publicUrl});
-      setStatus('✓ '+name+' lastet opp');
-    } catch(e) {
-      setStatus('⚠ '+e.message);
-      showToast('❌ ' + e.message);
-    }
+    requireAdmin(() => {
+      const name = file.name.replace(/\.glb$/i,'');
+      const reader = new FileReader();
+      reader.onload = e => {
+        const b64 = e.target.result;
+        projects[fname] = (projects[fname]||[]).filter(m=>m.name!==name);
+        projects[fname].push({name, url: b64, embedded: true});
+        save(); render();
+        loadModel({name, url: b64});
+      };
+      reader.readAsDataURL(file);
+    });
   }
   function deleteModel(fname,idx) {
-    requireAdmin(() => _doDeleteModel(fname,idx));
-  }
-  async function _doDeleteModel(fname,idx) {
-    if (!confirm('Fjern modellen?')) return;
-    const m = projects[fname][idx];
-    // Slett fra Supabase Storage hvis det er en Supabase-URL
-    if (m && m.url && m.url.includes('supabase.co')) {
-      try {
-        const filePath = fname + '/' + m.name + '.glb';
-        await fetch(
-          _SB_URL + '/storage/v1/object/models/' + encodeURIComponent(filePath),
-          {
-            method: 'DELETE',
-            headers: { 'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY }
-          }
-        );
-      } catch(e) { console.warn('Kunne ikke slette fra Supabase:', e); }
-    }
-    await sbDeleteLibraryEntry(fname, m.name);
-    projects[fname].splice(idx,1);
-    save(); render();
+    requireAdmin(() => {
+      if (!confirm('Fjern modellen?')) return;
+      const m = projects[fname][idx];
+      if (m&&m.url) URL.revokeObjectURL(m.url);
+      projects[fname].splice(idx,1);
+      save(); render();
+    });
   }
 
   // ── 3D ─────────────────────────────────────────────────
@@ -5873,7 +5684,7 @@ const LIB = (() => {
   }
   function unloadModel() {
     if (!model) return;
-    // Ikke clear _hiddenMeshes her — unhide-knappen skal bestå ved modelbytte
+    // Beholder _hiddenMeshes — unhide-knapp forblir synlig ved modelbytte
     scene.remove(model);
     model.traverse(o => {
       if (o.geometry) o.geometry.dispose();
@@ -6291,10 +6102,9 @@ async function sbSaveConfig(prefix, state) {
 }
 
 async function sbLoadConfig(fullId) {
-  const clean = fullId.trim().toUpperCase();
-  const parts  = clean.split('-');
+  const parts  = fullId.trim().toUpperCase().split('-');
   if (parts.length < 2) throw new Error('Ugyldig ID');
-  const prefix  = parts[0]; // TRP, GBN, MLT
+  const prefix  = parts[0];
   const shortId = parts[1];
 
   const res = await fetch(
@@ -6413,301 +6223,6 @@ function _applyDarkScene(isDark) {
 
 
 
-async function shareConfigStair() {
-  try {
-    showToast('Genererer ID…');
-    let id;
-    if (_konfigList.length > 1) {
-      id = await generateMultiConfigId();
-    } else {
-      const state = {...S, _repos:{...REPOS,
-        reposRailExcluded:[...S.reposRailExcluded]},
-        _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
-      id = await sbSaveConfig('TRP', state);
-    }
-    document.getElementById('s-share-id-display').textContent = id;
-    document.getElementById('s-share-wrap').style.display = '';
-    showToast('🔗 ID klar: ' + id);
-  } catch(e) { showToast('❌ Feil: ' + e.message); }
-}
-
-async function shareConfigWalk() {
-  try {
-    showToast('Genererer ID…');
-    let id;
-    if (_konfigList.length > 1) {
-      id = await generateMultiConfigId();
-    } else {
-      const state = {...W, _mode:'walk'};
-      id = await sbSaveConfig('GBN', state);
-    }
-    document.getElementById('w-share-id-display').textContent = id;
-    document.getElementById('w-share-wrap').style.display = '';
-    showToast('🔗 ID klar: ' + id);
-  } catch(e) { showToast('❌ Feil: ' + e.message); }
-}
-
-function copyShareId(mode) {
-  const el = document.getElementById(mode==='s' ? 's-share-id-display' : 'w-share-id-display');
-  const id = el ? el.textContent.trim() : '';
-  if (!id || id==='—') return;
-  navigator.clipboard.writeText(id)
-    .then(() => showToast('📋 ID kopiert: ' + id))
-    .catch(() => { prompt('Kopier ID-en:', id); });
-}
-
-// ═══════════════════════════════════════════════════════════════
-// MA — Monteringsanvisning
-// ═══════════════════════════════════════════════════════════════
-var MA = (() => {
-  const SB_BASE = 'https://hdfilgkrcmvvwfmtxdsm.supabase.co/storage/v1/object/public/models/monteringsanvisning/';
-
-  const STEPS = [
-    {
-      file: '01_gangbaneprofil.glb',
-      title: 'Gangbaneramme',
-      desc: 'Profilene kappes til ønsket lengde og bredde — utgjør den bærende rammen som holder ristene. Profilen leveres i sjøvannsbestandig aluminium med integrerte skruespor i topp og bunn.'
-    },
-    {
-      file: '02_hjornemodul.glb',
-      title: 'Hjørnemodul',
-      desc: 'Endestykkene gjæres i 45°. En innvendig hjørneprofil føres inn i hulrommet og låses med grove popnagler. Dette gir en stiv og stabil hjørneløsning.'
-    },
-    {
-      file: '03_understag.glb',
-      title: 'Understag',
-      desc: 'Monteres i skruesporet på undersiden av gangbaneprofilen. Anbefalt plassering: 1 stk. per 3 meter. Bidrar til økt torsjonsstivhet.'
-    },
-    {
-      file: '04_rister.glb',
-      title: 'Plassering av rister',
-      desc: 'Ristene skyves inn via profilens integrerte ristespor og låses mekanisk. Ingen separat festemateriell nødvendig.'
-    },
-    {
-      file: '05_rekkverksstolper.glb',
-      title: 'Rekkverksstolper',
-      desc: 'Stolpene integreres i gangbaneprofilens toppspor via mutterskinne. Kan plasseres fritt — maks c/c 1200 mm. Låses mekanisk fra oversiden.'
-    },
-    {
-      file: '06_haandloper.glb',
-      title: 'Håndløper',
-      desc: 'Monteres på toppen av stenderne. Innfesting skjer ved boring gjennom håndløper og stender, sikres med 4,8 mm popnagler.'
-    },
-    {
-      file: '07_knelist.glb',
-      title: 'Knelist og endelokk',
-      desc: 'Knelist festes til stenderne med 4,8 mm popnagler. Maks lysåpning mellom håndløper og knelist: 500 mm. Sorte endelokk gir ren finish.'
-    },
-  ];
-
-  let currentStep = 0;
-  let loadedModels = []; // akkumulerte modeller
-  let active = false;
-  let loader = null;
-  let _animFrame = null;
-
-  function open() {
-    active = true;
-    currentStep = 0;
-    loadedModels = [];
-    // Lukk biblioteket
-    const libOverlay = document.getElementById('lib-overlay');
-    if(libOverlay) libOverlay.classList.remove('lib-open');
-    const toggleBtn = document.getElementById('lib-toggle-btn');
-    if(toggleBtn) { toggleBtn.style.display='none'; toggleBtn.classList.remove('lib-open'); }
-    // Rydd scenen
-    if(typeof clearGrp === 'function') clearGrp();
-    scene.traverse(o => { if(o.isGridHelper) o.visible = false; });
-    // Skjul welcome-screen, vis konfig-tab-bar
-    const ws = document.getElementById('welcome-screen');
-    if(ws) ws.style.display = 'none';
-    const tabBar = document.getElementById('konfig-tab-bar');
-    if(tabBar) tabBar.style.removeProperty('display');
-    // Vis MA panel via classList direkte
-    document.getElementById('spanel').classList.remove('visible');
-    document.getElementById('wpanel').classList.remove('visible');
-    document.getElementById('mapanel').classList.add('visible');
-    currentMode = 'ma';
-    document.getElementById('canvas-hint').textContent = '🔵 Blå = aktivt steg · Roter og zoom fritt';
-    _loadStep(0);
-    _updateUI();
-  }
-
-  function close() {
-    if(!active) return;
-    active = false;
-    if(_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
-    loadedModels.forEach(m => { try { scene.remove(m); } catch(e){} });
-    loadedModels = [];
-    scene.traverse(o => { if(o.isGridHelper) o.visible = true; });
-    document.getElementById('mapanel').classList.remove('visible');
-    if(typeof renderer !== 'undefined') renderer.render(scene, cam);
-    // Gå til startmeny direkte
-    const ws = document.getElementById('welcome-screen');
-    if(ws) ws.style.display = '';
-    ['konfig-tab-bar','view-toggle','walk-toolbar'].forEach(id=>{
-      const el=document.getElementById(id); if(el) el.style.display='none';
-    });
-    const tek=document.getElementById('tek-panel');
-    if(tek) tek.style.display='none';
-  }
-
-  function next() {
-    if(currentStep >= STEPS.length - 1) return;
-    currentStep++;
-    _loadStep(currentStep);
-    _updateUI();
-  }
-
-  function prev() {
-    if(currentStep <= 0) return;
-    currentStep--;
-    // Rydd alle MA-modeller og last steg 0..currentStep på nytt
-    loadedModels.forEach(m => scene.remove(m));
-    loadedModels = [];
-    // Last alle steg opp til og med currentStep (akkumulert, uten animasjon)
-    _reloadUpTo(currentStep);
-    _updateUI();
-  }
-
-  function _reloadUpTo(targetStep) {
-    if(!loader) {
-      if(typeof THREE !== 'undefined' && THREE.GLTFLoader)
-        loader = new THREE.GLTFLoader();
-      else return;
-    }
-    // Last sekvensielt — én om gangen for å unngå race condition
-    let i = 0;
-    function loadNext() {
-      if(i > targetStep) {
-        if(typeof renderer !== 'undefined') renderer.render(scene, cam);
-        return;
-      }
-      const idx = i++;
-      const url = SB_BASE + STEPS[idx].file;
-      const isLast = (idx === targetStep);
-      loader.load(url, gltf => {
-        const m = gltf.scene;
-        _setModelMat(m, isLast ? MAT_BLUE : MAT_GREY);
-        m.userData.animating = false;
-        scene.add(m);
-        loadedModels.push(m);
-        loadNext();
-      }, null, err => { console.warn('MA reload feil:', err); loadNext(); });
-    }
-    loadNext();
-  }
-
-  const MAT_GREY = new THREE.MeshLambertMaterial({ color: 0x8a9bb0 });
-  const MAT_BLUE = new THREE.MeshLambertMaterial({ color: 0x2d8ccc, emissive: 0x0d3a5c, emissiveIntensity: 0.35 });
-
-  function _setModelMat(model, mat) {
-    model.traverse(o => { if(o.isMesh) o.material = mat; });
-  }
-
-  function _loadStep(stepIdx) {
-    if(!loader) {
-      if(typeof THREE !== 'undefined' && THREE.GLTFLoader)
-        loader = new THREE.GLTFLoader();
-      else return;
-    }
-    const step = STEPS[stepIdx];
-    const url  = SB_BASE + step.file;
-
-    // Gjør alle eksisterende modeller grå
-    loadedModels.forEach(m => _setModelMat(m, MAT_GREY));
-
-    loader.load(url, gltf => {
-      const model = gltf.scene;
-      // Ny komponent er blå (aktiv)
-      _setModelMat(model, MAT_BLUE);
-
-      // Finn bounding box
-      const box = new THREE.Box3().setFromObject(model);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-
-      // Animér inn langs world Y-aksen (ovenfra) — stort offset, sakte
-      const dropHeight = Math.max(size.y * 5, 3.0);
-      model.position.y = model.position.y + dropHeight;
-      model.userData.targetY = model.position.y - dropHeight;
-      model.userData.animating = true;
-
-      scene.add(model);
-      loadedModels.push(model);
-
-      // Flytt kamera-fokus og zoom inn på ny komponent
-      if(typeof orbitTarget !== 'undefined') {
-        orbitTarget.set(center.x, center.y, center.z);
-      }
-      // Beregn radius basert på hele akkumulert bounding box
-      const allBox = new THREE.Box3();
-      loadedModels.forEach(m => allBox.expandByObject(m));
-      const allSize = new THREE.Vector3();
-      allBox.getSize(allSize);
-      const allCenter = new THREE.Vector3();
-      allBox.getCenter(allCenter);
-      if(typeof orbitTarget !== 'undefined') orbitTarget.copy(allCenter);
-      if(typeof radius !== 'undefined') {
-        radius = Math.max(allSize.x, allSize.y, allSize.z) * 1.8;
-        if(typeof ucam === 'function') ucam();
-      }
-      if(typeof renderer !== 'undefined') renderer.render(scene, cam);
-
-      _animate();
-    }, null, err => console.warn('MA load feil:', err));
-  }
-
-  function _animate() {
-    if(_animFrame) cancelAnimationFrame(_animFrame);
-    const animating = loadedModels.filter(m => m.userData.animating);
-    if(animating.length === 0) return;
-
-    _animFrame = requestAnimationFrame(() => {
-      let stillAnimating = false;
-      for(const m of animating) {
-        const diff = m.userData.targetY - m.position.y;
-        if(Math.abs(diff) < 0.003) {
-          m.position.y = m.userData.targetY;
-          m.userData.animating = false;
-        } else {
-          m.position.y += diff * 0.028; // langsom ease-out
-          stillAnimating = true;
-        }
-      }
-      if(typeof renderer !== 'undefined') renderer.render(scene, cam);
-      if(stillAnimating) _animate();
-    });
-  }
-
-  function _updateUI() {
-    const step = STEPS[currentStep];
-    const label = document.getElementById('ma-step-label');
-    const title = document.getElementById('ma-step-title');
-    const desc  = document.getElementById('ma-step-desc');
-    const prev  = document.getElementById('ma-btn-prev');
-    const next  = document.getElementById('ma-btn-next');
-    const prog  = document.getElementById('ma-progress');
-    if(label) label.textContent = 'Steg ' + (currentStep+1) + ' av ' + STEPS.length;
-    if(title) title.textContent = step.title;
-    if(desc)  desc.textContent  = step.desc;
-    if(prev)  prev.disabled = currentStep === 0;
-    if(next) {
-      next.textContent = currentStep === STEPS.length-1 ? '✓ Ferdig' : 'Neste steg →';
-      next.disabled = false;
-    }
-    if(prog) {
-      prog.innerHTML = STEPS.map((_, i) =>
-        `<div class="ma-dot ${i < currentStep ? 'done' : i === currentStep ? 'active' : ''}"></div>`
-      ).join('');
-    }
-  }
-
-  return { open, close, next, prev, isActive: () => active };
-})();
-
 function goHome() {
   // Exit library if active
   if (typeof LIB !== 'undefined' && LIB.isActive()) LIB.exit();
@@ -6717,8 +6232,6 @@ function goHome() {
   // Use classList — same mechanism as switchMode, no inline style conflict
   document.getElementById('spanel').classList.remove('visible');
   document.getElementById('wpanel').classList.remove('visible');
-  document.getElementById('mapanel').classList.remove('visible');
-  if(typeof MA !== 'undefined' && MA.isActive()) MA.close();
   document.getElementById('tab-s').className = 'mode-tab';
   document.getElementById('tab-w').className = 'mode-tab';
   // Hide toolbar elements
@@ -6742,9 +6255,8 @@ function goHome() {
       onkeydown="if(event.key==='Enter')LIB.checkPw()">
     <div class="lib-modal-err" id="lib-modal-err">Feil passord</div>
     <button class="lib-modal-btn" onclick="LIB.checkPw()">Logg inn</button>
-    <button onclick="document.getElementById('lib-login-modal').classList.remove('open')"
-      style="width:100%;margin-top:.5rem;padding:.4rem;background:none;border:1px solid var(--border);
-             border-radius:7px;cursor:pointer;font-family:inherit;color:var(--muted);">Avbryt</button>
+    <button onclick="document.getElementById('lib-login-modal').classList.remove('open');document.getElementById('lib-pw-input').value='';"
+      style="width:100%;margin-top:.5rem;padding:.4rem;background:none;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-family:inherit;color:var(--muted);">Avbryt</button>
   </div>
 </div>
 
@@ -6753,14 +6265,13 @@ function goHome() {
 <div id="lib-admin-modal" style="position:fixed;inset:0;z-index:902;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;flex-direction:column;">
   <div class="lib-modal-box" style="min-width:260px;">
     <div style="font-weight:700;margin-bottom:.75rem;font-size:.95rem;">🔐 Admin-tilgang</div>
-    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem;">Skriv inn admin-passord for å laste opp eller slette modeller.</div>
-    <div class="lib-modal-err" id="lib-admin-err">Feil passord</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem;">Skriv inn admin-passord for å fortsette.</div>
+    <div class="lib-modal-err" id="lib-admin-err" style="display:none;color:#c0392b;font-size:.78rem;margin-bottom:.5rem;">Feil passord</div>
     <input class="lib-modal-input" id="lib-admin-input" type="password" placeholder="Admin-passord"
       onkeydown="if(event.key==='Enter')LIB.checkAdminPw()">
     <button class="lib-modal-btn" onclick="LIB.checkAdminPw()">Bekreft</button>
-    <button onclick="document.getElementById('lib-admin-modal').style.display='none'"
-      style="width:100%;margin-top:.5rem;padding:.4rem;background:none;border:1px solid var(--border);
-             border-radius:7px;cursor:pointer;font-family:inherit;color:var(--muted);">Avbryt</button>
+    <button onclick="document.getElementById('lib-admin-modal').style.display='none';document.getElementById('lib-admin-input').value='';"
+      style="width:100%;margin-top:.5rem;padding:.4rem;background:none;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-family:inherit;color:var(--muted);">Avbryt</button>
   </div>
 </div>
 
@@ -6780,13 +6291,6 @@ function goHome() {
        <button id="lib-unhide-btn" onclick="LIB.unhideAll()"
          style="display:none;width:100%;padding:.38rem .6rem;background:#eaf2f7;border:1px solid var(--nblue);border-radius:6px;color:var(--nblue);font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;text-align:left;">
          👁 Vis alle (0)
-       </button>
-       <button onclick="MA.open();"
-         style="width:100%;padding:.38rem .6rem;background:linear-gradient(135deg,#0f1922,#1a2b3c);
-                border:1px solid #f19d0d;border-radius:6px;color:#f19d0d;font-size:.78rem;
-                font-weight:700;cursor:pointer;font-family:inherit;text-align:center;
-                letter-spacing:.04em;">
-         🔧 Monteringsanvisning
        </button>
        <div style="font-size:.67rem;color:var(--muted);line-height:1.4;">
          Klikk: mål mesh &nbsp;·&nbsp; Dobbeltklikk: skjul mesh
