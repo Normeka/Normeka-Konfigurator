@@ -353,6 +353,105 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
 
 
 /* ── Loading screen ─────────────────────────────────────── */
+/* ── Monteringsanvisning ── */
+#ma-overlay {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+#ma-panel {
+  position: absolute;
+  bottom: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15,25,34,.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  padding: .85rem 1.2rem;
+  min-width: 320px;
+  max-width: 90vw;
+  color: #fff;
+  font-family: 'Barlow', sans-serif;
+  pointer-events: all;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+#ma-step-label {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: #f19d0d;
+  margin-bottom: .25rem;
+}
+#ma-step-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: .3rem;
+}
+#ma-step-desc {
+  font-size: .8rem;
+  color: rgba(255,255,255,.7);
+  line-height: 1.5;
+  margin-bottom: .75rem;
+}
+#ma-controls {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+.ma-btn {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  color: #fff;
+  border-radius: 8px;
+  padding: .4rem .9rem;
+  font-family: 'Barlow', sans-serif;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.ma-btn:hover { background: rgba(255,255,255,.2); }
+.ma-btn:disabled { opacity: .35; cursor: default; }
+.ma-btn-next {
+  background: #f19d0d;
+  border-color: #f19d0d;
+  color: #1a1a18;
+  flex: 1;
+}
+.ma-btn-next:hover { background: #fdb030; }
+#ma-progress {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+}
+.ma-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.25);
+  transition: background .2s;
+}
+.ma-dot.active { background: #f19d0d; }
+.ma-dot.done   { background: rgba(255,255,255,.55); }
+#ma-close {
+  position: absolute;
+  top: .6rem; right: .8rem;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,.5);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: .2rem;
+}
+#ma-close:hover { color: #fff; }
+@keyframes ma-slide-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#ma-panel { animation: ma-slide-in .3s ease; }
+
 /* ── 3D viewport click ripple ── */
 @keyframes viewport-ripple {
   0%   { transform:translate(-50%,-50%) scale(0); opacity:.5; }
@@ -806,6 +905,20 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
     padding:.3rem .6rem;border-radius:5px;white-space:nowrap;
   ">Trykk på geometri</div>
 </div>
+<div id="ma-overlay" style="display:none;">
+  <div id="ma-panel">
+    <button id="ma-close" onclick="MA.close()">✕</button>
+    <div id="ma-step-label">Steg 1 av 7</div>
+    <div id="ma-step-title">Gangbaneramme</div>
+    <div id="ma-step-desc">Profilene kappes til ønsket lengde og bredde.</div>
+    <div id="ma-controls">
+      <button class="ma-btn" id="ma-btn-prev" onclick="MA.prev()">← Forrige</button>
+      <button class="ma-btn ma-btn-next" id="ma-btn-next" onclick="MA.next()">Neste →</button>
+      <div id="ma-progress"></div>
+    </div>
+  </div>
+</div>
+
 <div id="zoom-slider-wrap">
       <span class="zoom-icon" onclick="zoomStep(-1)" title="Zoom inn">＋</span>
       <input type="range" id="zoom-slider" min="1" max="35" step="0.5" value="10"
@@ -6402,6 +6515,180 @@ function copyShareId(mode) {
     .catch(() => { prompt('Kopier ID-en:', id); });
 }
 
+// ═══════════════════════════════════════════════════════════════
+// MA — Monteringsanvisning
+// ═══════════════════════════════════════════════════════════════
+var MA = (() => {
+  const SB_BASE = 'https://hdfilgkrcmvvwfmtxdsm.supabase.co/storage/v1/object/public/models/monteringsanvisning/';
+
+  const STEPS = [
+    {
+      file: '01_gangbaneprofil.glb',
+      title: 'Gangbaneramme',
+      desc: 'Profilene kappes til ønsket lengde og bredde — utgjør den bærende rammen som holder ristene. Profilen leveres i sjøvannsbestandig aluminium med integrerte skruespor i topp og bunn.'
+    },
+    {
+      file: '02_hjornemodul.glb',
+      title: 'Hjørnemodul',
+      desc: 'Endestykkene gjæres i 45°. En innvendig hjørneprofil føres inn i hulrommet og låses med grove popnagler. Dette gir en stiv og stabil hjørneløsning.'
+    },
+    {
+      file: '03_understag.glb',
+      title: 'Understag',
+      desc: 'Monteres i skruesporet på undersiden av gangbaneprofilen. Anbefalt plassering: 1 stk. per 3 meter. Bidrar til økt torsjonsstivhet.'
+    },
+    {
+      file: '04_rister.glb',
+      title: 'Plassering av rister',
+      desc: 'Ristene skyves inn via profilens integrerte ristespor og låses mekanisk. Ingen separat festemateriell nødvendig.'
+    },
+    {
+      file: '05_rekkverksstolper.glb',
+      title: 'Rekkverksstolper',
+      desc: 'Stolpene integreres i gangbaneprofilens toppspor via mutterskinne. Kan plasseres fritt — maks c/c 1200 mm. Låses mekanisk fra oversiden.'
+    },
+    {
+      file: '06_haandloper.glb',
+      title: 'Håndløper',
+      desc: 'Monteres på toppen av stenderne. Innfesting skjer ved boring gjennom håndløper og stender, sikres med 4,8 mm popnagler.'
+    },
+    {
+      file: '07_knelist.glb',
+      title: 'Knelist og endelokk',
+      desc: 'Knelist festes til stenderne med 4,8 mm popnagler. Maks lysåpning mellom håndløper og knelist: 500 mm. Sorte endelokk gir ren finish.'
+    },
+  ];
+
+  let currentStep = 0;
+  let loadedModels = []; // akkumulerte modeller
+  let active = false;
+  let loader = null;
+  let _animFrame = null;
+
+  function open() {
+    active = true;
+    currentStep = 0;
+    loadedModels = [];
+    // Skjul gulv/grid i MA-modus
+    scene.traverse(o => { if(o.isGridHelper || (o.isMesh && o.userData.isFloor)) o.visible = false; });
+    document.getElementById('ma-overlay').style.display = '';
+    _loadStep(0);
+    _updateUI();
+  }
+
+  function close() {
+    active = false;
+    // Fjern MA-modeller
+    loadedModels.forEach(m => scene.remove(m));
+    loadedModels = [];
+    if(_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
+    // Vis gulv/grid igjen
+    scene.traverse(o => { if(o.isGridHelper || (o.isMesh && o.userData.isFloor)) o.visible = true; });
+    document.getElementById('ma-overlay').style.display = 'none';
+    if(typeof renderer !== 'undefined') renderer.render(scene, cam);
+  }
+
+  function next() {
+    if(currentStep >= STEPS.length - 1) return;
+    currentStep++;
+    _loadStep(currentStep);
+    _updateUI();
+  }
+
+  function prev() {
+    if(currentStep <= 0) return;
+    // Fjern siste modell
+    const last = loadedModels.pop();
+    if(last) scene.remove(last);
+    currentStep--;
+    _updateUI();
+    if(typeof renderer !== 'undefined') renderer.render(scene, cam);
+  }
+
+  function _loadStep(stepIdx) {
+    if(!loader) {
+      if(typeof THREE !== 'undefined' && THREE.GLTFLoader)
+        loader = new THREE.GLTFLoader();
+      else return;
+    }
+    const step = STEPS[stepIdx];
+    const url  = SB_BASE + step.file;
+
+    loader.load(url, gltf => {
+      const model = gltf.scene;
+      const mat = new THREE.MeshLambertMaterial({ color: 0x8a9bb0 });
+      model.traverse(o => { if(o.isMesh) o.material = mat; });
+
+      // Finn bounding box for å sentrere
+      const box = new THREE.Box3().setFromObject(model);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+
+      // Start offset på X-aksen (glider inn fra siden)
+      const startX = model.position.x - 6.0;
+      model.position.x = startX;
+      model.userData.targetX = model.position.x + 6.0;
+      model.userData.animating = true;
+
+      scene.add(model);
+      loadedModels.push(model);
+
+      // Fit kamera ved første steg
+      if(stepIdx === 0) {
+        if(typeof orbitTarget !== 'undefined') orbitTarget.copy(center);
+        if(typeof radius !== 'undefined') {
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          radius = Math.max(size.x, size.y, size.z) * 2.2;
+          if(typeof ucam === 'function') ucam();
+        }
+      }
+
+      _animate();
+    }, null, err => console.warn('MA load feil:', err));
+  }
+
+  function _animate() {
+    if(_animFrame) cancelAnimationFrame(_animFrame);
+    const animating = loadedModels.filter(m => m.userData.animating);
+    if(animating.length === 0) return;
+
+    _animFrame = requestAnimationFrame(() => {
+      let stillAnimating = false;
+      for(const m of animating) {
+        const diff = m.userData.targetX - m.position.x;
+        if(Math.abs(diff) < 0.002) {
+          m.position.x = m.userData.targetX;
+          m.userData.animating = false;
+        } else {
+          m.position.x += diff * 0.12; // ease-out
+          stillAnimating = true;
+        }
+      }
+      if(typeof renderer !== 'undefined') renderer.render(scene, cam);
+      if(stillAnimating) _animate();
+    });
+  }
+
+  function _updateUI() {
+    const step = STEPS[currentStep];
+    document.getElementById('ma-step-label').textContent = 'Steg ' + (currentStep+1) + ' av ' + STEPS.length;
+    document.getElementById('ma-step-title').textContent = step.title;
+    document.getElementById('ma-step-desc').textContent  = step.desc;
+    document.getElementById('ma-btn-prev').disabled = currentStep === 0;
+    document.getElementById('ma-btn-next').textContent = currentStep === STEPS.length-1 ? '✓ Ferdig' : 'Neste →';
+    document.getElementById('ma-btn-next').disabled = false;
+
+    // Progress dots
+    const prog = document.getElementById('ma-progress');
+    prog.innerHTML = STEPS.map((_, i) =>
+      `<div class="ma-dot ${i < currentStep ? 'done' : i === currentStep ? 'active' : ''}"></div>`
+    ).join('');
+  }
+
+  return { open, close, next, prev, isActive: () => active };
+})();
+
 function goHome() {
   // Exit library if active
   if (typeof LIB !== 'undefined' && LIB.isActive()) LIB.exit();
@@ -6472,6 +6759,13 @@ function goHome() {
        <button id="lib-unhide-btn" onclick="LIB.unhideAll()"
          style="display:none;width:100%;padding:.38rem .6rem;background:#eaf2f7;border:1px solid var(--nblue);border-radius:6px;color:var(--nblue);font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;text-align:left;">
          👁 Vis alle (0)
+       </button>
+       <button onclick="LIB.exit(); MA.open();"
+         style="width:100%;padding:.38rem .6rem;background:linear-gradient(135deg,#0f1922,#1a2b3c);
+                border:1px solid #f19d0d;border-radius:6px;color:#f19d0d;font-size:.78rem;
+                font-weight:700;cursor:pointer;font-family:inherit;text-align:center;
+                letter-spacing:.04em;">
+         🔧 Monteringsanvisning
        </button>
        <div style="font-size:.67rem;color:var(--muted);line-height:1.4;">
          Klikk: mål mesh &nbsp;·&nbsp; Dobbeltklikk: skjul mesh
