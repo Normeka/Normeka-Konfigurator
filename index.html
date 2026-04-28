@@ -897,31 +897,6 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
     padding:.3rem .6rem;border-radius:5px;white-space:nowrap;
   ">Trykk på geometri</div>
 </div>
-<div id="ma-overlay" style="display:none;">
-  <div id="ma-panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem;">
-      <button id="ma-toggle" onclick="MA.togglePanel()"
-        style="background:none;border:none;color:rgba(255,255,255,.5);font-size:.8rem;cursor:pointer;padding:.1rem .3rem;"
-        title="Minimer panel">▲</button>
-      <button onclick="MA.close()" title="Avslutt"
-        style="background:rgba(231,76,60,.25);border:1px solid rgba(231,76,60,.5);color:#e74c3c;
-               border-radius:6px;padding:.2rem .6rem;font-size:.75rem;cursor:pointer;font-family:Barlow,sans-serif;">
-        ✕ Avslutt
-      </button>
-    </div>
-    <div id="ma-panel-body">
-      <div id="ma-step-label">Steg 1 av 7</div>
-      <div id="ma-step-title">Gangbaneramme</div>
-      <div id="ma-step-desc">Profilene kappes til ønsket lengde og bredde.</div>
-      <div id="ma-controls">
-        <button class="ma-btn" id="ma-btn-prev" onclick="MA.prev()">← Forrige</button>
-        <button class="ma-btn ma-btn-next" id="ma-btn-next" onclick="MA.next()">Neste →</button>
-        <div id="ma-progress"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div id="zoom-slider-wrap">
       <span class="zoom-icon" onclick="zoomStep(-1)" title="Zoom inn">＋</span>
       <input type="range" id="zoom-slider" min="1" max="35" step="0.5" value="10"
@@ -1405,6 +1380,45 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
     </div>
   </div>
 </div>
+<!-- ══ MA PANEL ══ -->
+<div class="config-panel" id="mapanel">
+  <div class="ss" style="border-bottom:1px solid var(--border);padding-bottom:.8rem;margin-bottom:.6rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+      <div style="flex:1;">
+        <div style="font-size:.65rem;font-weight:700;color:var(--nyellow);text-transform:uppercase;letter-spacing:.12em;" id="ma-step-label">Steg 1 av 7</div>
+        <div style="font-size:1.05rem;font-weight:700;color:var(--text);margin-top:.15rem;" id="ma-step-title">Gangbaneramme</div>
+      </div>
+      <div id="ma-progress" style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:80px;"></div>
+    </div>
+  </div>
+  <div class="ss">
+    <div id="ma-step-desc" style="font-size:.82rem;color:var(--muted);line-height:1.65;"></div>
+  </div>
+  <div class="ss" style="display:flex;flex-direction:column;gap:.5rem;">
+    <div style="display:flex;gap:.5rem;">
+      <button id="ma-btn-prev" onclick="MA.prev()"
+        style="flex:1;padding:.45rem .5rem;background:var(--surface2);border:1.5px solid var(--border);
+               border-radius:8px;color:var(--text);font-family:Barlow,sans-serif;font-size:.82rem;
+               font-weight:600;cursor:pointer;">← Forrige</button>
+      <button id="ma-btn-next" onclick="MA.next()"
+        style="flex:2;padding:.45rem .5rem;background:var(--nyellow);border:1.5px solid var(--nyellow);
+               border-radius:8px;color:#1a1a18;font-family:Barlow,sans-serif;font-size:.82rem;
+               font-weight:700;cursor:pointer;">Neste steg →</button>
+    </div>
+    <button onclick="MA.close()"
+      style="width:100%;padding:.42rem;background:#fff;border:1.5px solid #e74c3c;border-radius:8px;
+             color:#e74c3c;font-family:Barlow,sans-serif;font-size:.82rem;font-weight:600;cursor:pointer;">
+      ✕ Avslutt monteringsanvisning
+    </button>
+  </div>
+  <div class="ss">
+    <div style="font-size:.7rem;color:var(--muted);text-align:center;line-height:1.5;">
+      Roter og zoom fritt i 3D-visningen<br>
+      🔵 Blå komponent = aktivt monteringssteg
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -6571,19 +6585,24 @@ var MA = (() => {
     active = true;
     currentStep = 0;
     loadedModels = [];
-    // Lukk biblioteket uten å trigge buildWalk/buildStair
-    const overlay = document.getElementById('lib-overlay');
-    if(overlay) overlay.classList.remove('lib-open');
+    // Lukk biblioteket
+    const libOverlay = document.getElementById('lib-overlay');
+    if(libOverlay) libOverlay.classList.remove('lib-open');
     const toggleBtn = document.getElementById('lib-toggle-btn');
     if(toggleBtn) { toggleBtn.style.display='none'; toggleBtn.classList.remove('lib-open'); }
     // Rydd scenen
     if(typeof clearGrp === 'function') clearGrp();
-    // Skjul gulv/grid
     scene.traverse(o => { if(o.isGridHelper) o.visible = false; });
-    document.getElementById('ma-overlay').style.display = '';
-    // Oppdater canvas-hint
+    // Vis MA sidebar, skjul andre paneler
+    document.getElementById('spanel').classList.remove('visible');
+    document.getElementById('wpanel').classList.remove('visible');
+    document.getElementById('mapanel').classList.add('visible');
+    // Vis konfig-tab-bar (for context)
+    const tabBar = document.getElementById('konfig-tab-bar');
+    if(tabBar) tabBar.style.removeProperty('display');
+    // Canvas hint
     const hint = document.getElementById('canvas-hint');
-    if(hint) hint.textContent = '🔧 Monteringsanvisning · Rotér og zoom fritt · Bruk pilene for å navigere';
+    if(hint) hint.textContent = '🔵 Blå = aktivt steg · Rotér og zoom fritt';
     _loadStep(0);
     _updateUI();
   }
@@ -6594,16 +6613,10 @@ var MA = (() => {
     loadedModels.forEach(m => { try { scene.remove(m); } catch(e){} });
     loadedModels = [];
     scene.traverse(o => { if(o.isGridHelper) o.visible = true; });
-    const ov = document.getElementById('ma-overlay');
-    if(ov) ov.style.display = 'none';
+    document.getElementById('mapanel').classList.remove('visible');
     if(typeof renderer !== 'undefined') renderer.render(scene, cam);
     // Gå til startmeny
-    const ws = document.getElementById('welcome-screen');
-    if(ws) ws.style.display = '';
-    // Skjul header-elementer
-    ['konfig-tab-bar','view-toggle','walk-toolbar'].forEach(id=>{
-      const el=document.getElementById(id); if(el) el.style.display='none';
-    });
+    if(typeof goHome === 'function') goHome();
   }
 
   function next() {
@@ -6728,30 +6741,28 @@ var MA = (() => {
 
   function _updateUI() {
     const step = STEPS[currentStep];
-    document.getElementById('ma-step-label').textContent = 'Steg ' + (currentStep+1) + ' av ' + STEPS.length;
-    document.getElementById('ma-step-title').textContent = step.title;
-    document.getElementById('ma-step-desc').textContent  = step.desc;
-    document.getElementById('ma-btn-prev').disabled = currentStep === 0;
-    document.getElementById('ma-btn-next').textContent = currentStep === STEPS.length-1 ? '✓ Ferdig' : 'Neste →';
-    document.getElementById('ma-btn-next').disabled = false;
-
-    // Progress dots
-    const prog = document.getElementById('ma-progress');
-    prog.innerHTML = STEPS.map((_, i) =>
-      `<div class="ma-dot ${i < currentStep ? 'done' : i === currentStep ? 'active' : ''}"></div>`
-    ).join('');
+    const label = document.getElementById('ma-step-label');
+    const title = document.getElementById('ma-step-title');
+    const desc  = document.getElementById('ma-step-desc');
+    const prev  = document.getElementById('ma-btn-prev');
+    const next  = document.getElementById('ma-btn-next');
+    const prog  = document.getElementById('ma-progress');
+    if(label) label.textContent = 'Steg ' + (currentStep+1) + ' av ' + STEPS.length;
+    if(title) title.textContent = step.title;
+    if(desc)  desc.textContent  = step.desc;
+    if(prev)  prev.disabled = currentStep === 0;
+    if(next) {
+      next.textContent = currentStep === STEPS.length-1 ? '✓ Ferdig' : 'Neste steg →';
+      next.disabled = false;
+    }
+    if(prog) {
+      prog.innerHTML = STEPS.map((_, i) =>
+        `<div class="ma-dot ${i < currentStep ? 'done' : i === currentStep ? 'active' : ''}"></div>`
+      ).join('');
+    }
   }
 
-  let _panelCollapsed = false;
-  function togglePanel() {
-    _panelCollapsed = !_panelCollapsed;
-    const body = document.getElementById('ma-panel-body');
-    const btn  = document.getElementById('ma-toggle');
-    if(body) body.style.display = _panelCollapsed ? 'none' : '';
-    if(btn)  btn.textContent = _panelCollapsed ? '▼' : '▲';
-  }
-
-  return { open, close, next, prev, togglePanel, isActive: () => active };
+  return { open, close, next, prev, isActive: () => active };
 })();
 
 function goHome() {
