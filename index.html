@@ -356,7 +356,7 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
 /* ── Monteringsanvisning ── */
 #ma-overlay {
   position: absolute;
-  bottom: 0; left: 0; right: 0;
+  top: 0; bottom: 0; left: 0; right: 0;
   z-index: 60;
   pointer-events: none;
 }
@@ -6598,7 +6598,12 @@ var MA = (() => {
     if(ov) ov.style.display = 'none';
     if(typeof renderer !== 'undefined') renderer.render(scene, cam);
     // Gå til startmeny
-    if(typeof goHome === 'function') goHome();
+    const ws = document.getElementById('welcome-screen');
+    if(ws) ws.style.display = '';
+    // Skjul header-elementer
+    ['konfig-tab-bar','view-toggle','walk-toolbar'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.style.display='none';
+    });
   }
 
   function next() {
