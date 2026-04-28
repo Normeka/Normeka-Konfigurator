@@ -5316,7 +5316,7 @@ const LIB = (() => {
     _adminCallback = callback;
     const m = document.getElementById('lib-admin-modal');
     if(m) {
-      m.style.setProperty('display','flex','important');
+      m.style.display = 'flex';
       document.getElementById('lib-admin-err').style.display = 'none';
       document.getElementById('lib-admin-input').value = '';
       setTimeout(() => document.getElementById('lib-admin-input').focus(), 60);
@@ -5328,7 +5328,7 @@ const LIB = (() => {
     crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)).then(buf => {
       const pw = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
       if (pw === ADMIN_PW) {
-        document.getElementById('lib-admin-modal').style.removeProperty('display');
+        document.getElementById('lib-admin-modal').style.display = 'none';
         document.getElementById('lib-admin-input').value = '';
         if (_adminCallback) { const cb = _adminCallback; _adminCallback = null; cb(); }
       } else {
@@ -5602,10 +5602,12 @@ const LIB = (() => {
 
   // ── Folder ops ─────────────────────────────────────────
   function newFolder() {
-    const n = (prompt('Mappenavn:', 'Prosjekt '+(Object.keys(projects).length+1))||'').trim();
-    if (!n) return;
-    if (projects[n]) { alert('Finnes allerede.'); return; }
-    requireAdmin(() => { projects[n] = []; save(); render(); });
+    requireAdmin(() => {
+      const n = (prompt('Mappenavn:', 'Prosjekt '+(Object.keys(projects).length+1))||'').trim();
+      if (!n) return;
+      if (projects[n]) { alert('Finnes allerede.'); return; }
+      projects[n] = []; save(); render();
+    });
   }
   function renameFolder(old) {
     const n = (prompt('Nytt navn:', old)||'').trim();
