@@ -5314,33 +5314,63 @@ const LIB = (() => {
 
   // ── Persist ────────────────────────────────────────────
   function save() {
+    // Lokal backup (kun mappenavn, ikke modelldata)
     try {
-      // Store full base64 data so models persist across sessions
-      localStorage.setItem(STORE_KEY, JSON.stringify(projects));
-    } catch(e) {
-      // localStorage might be full with large base64 data
-      console.warn('Library save failed — models may not persist:', e);
-    }
+      const light = {};
+      for (const [k,v] of Object.entries(projects)) {
+        light[k] = v.filter(m=>!m.embedded).map(m=>({name:m.name,url:m.url}));
+      }
+      localStorage.setItem(STORE_KEY, JSON.stringify(light));
+    } catch(e) {}
   }
+
+  async function syncFromSupabase() {
+    try {
+      const res = await fetch(_SB_URL + '/rest/v1/library?select=folder,model_name,url&order=created_at.asc', {
+        headers: _SB_HDRS
+      });
+      if (!res.ok) return;
+      const rows = await res.json();
+      // Bygg opp mapper fra Supabase
+      for (const row of rows) {
+        if (!projects[row.folder]) projects[row.folder] = [];
+        if (!projects[row.folder].find(m => m.name===row.model_name)) {
+          projects[row.folder].push({ name: row.model_name, url: row.url, embedded: false });
+        }
+      }
+      render();
+    } catch(e) { console.warn('Supabase library sync feilet:', e); }
+  }
+
+  async function sbSaveLibraryEntry(folder, modelName, url) {
+    await fetch(_SB_URL + '/rest/v1/library', {
+      method: 'POST',
+      headers: { ..._SB_HDRS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ folder, model_name: modelName, url })
+    });
+  }
+
+  async function sbDeleteLibraryEntry(folder, modelName) {
+    await fetch(_SB_URL + '/rest/v1/library?folder=eq.' + encodeURIComponent(folder) + '&model_name=eq.' + encodeURIComponent(modelName), {
+      method: 'DELETE',
+      headers: _SB_HDRS
+    });
+  }
+
+  async function sbDeleteFolder(folderName) {
+    await fetch(_SB_URL + '/rest/v1/library?folder=eq.' + encodeURIComponent(folderName), {
+      method: 'DELETE',
+      headers: _SB_HDRS
+    });
+  }
+
   function load() {
-    // First load hardcoded models (baked into HTML by Claude)
+    // Last hardkodede modeller
     for (const [k,v] of Object.entries(_HARDCODED_LIBRARY)) {
       projects[k] = [...v];
     }
-    // Then merge localStorage (user-uploaded models in this browser)
-    try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return;
-      const m = JSON.parse(raw);
-      for (const [k,v] of Object.entries(m)) {
-        if (!projects[k]) projects[k] = [];
-        v.forEach(item => {
-          if (!projects[k].find(p => p.name===item.name)) {
-            projects[k].push(item);
-          }
-        });
-      }
-    } catch(e) {}
+    // Synk fra Supabase (asynkront)
+    syncFromSupabase();
   }
 
   // ── Login ──────────────────────────────────────────────
@@ -5655,8 +5685,20 @@ const LIB = (() => {
   function deleteFolder(name) {
     requireAdmin(() => _doDeleteFolder(name));
   }
-  function _doDeleteFolder(name) {
+  async function _doDeleteFolder(name) {
     if (!confirm('Slett «'+name+'»?')) return;
+    // Slett filer fra Storage og library-tabell
+    const mods = projects[name] || [];
+    for (const m of mods) {
+      if (m.url && m.url.includes('supabase.co')) {
+        try {
+          const filePath = name + '/' + m.name + '.glb';
+          await fetch(_SB_URL + '/storage/v1/object/models/' + encodeURIComponent(filePath),
+            { method: 'DELETE', headers: { 'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY } });
+        } catch(e) {}
+      }
+    }
+    await sbDeleteFolder(name);
     delete projects[name];
     if (folder===name) { view='root'; folder=null; }
     save(); render();
@@ -5692,6 +5734,7 @@ const LIB = (() => {
       const publicUrl = _SB_URL + '/storage/v1/object/public/models/' + encodeURIComponent(filePath);
       projects[fname] = (projects[fname]||[]).filter(m=>m.name!==name);
       projects[fname].push({name, url: publicUrl, embedded: false});
+      await sbSaveLibraryEntry(fname, name, publicUrl);
       save(); render();
       loadModel({name, url: publicUrl});
       setStatus('✓ '+name+' lastet opp');
@@ -5719,6 +5762,7 @@ const LIB = (() => {
         );
       } catch(e) { console.warn('Kunne ikke slette fra Supabase:', e); }
     }
+    await sbDeleteLibraryEntry(fname, m.name);
     projects[fname].splice(idx,1);
     save(); render();
   }
