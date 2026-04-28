@@ -5303,6 +5303,7 @@ const LIB = (() => {
   const PW        = '405d6335d8f946d0536de22a7f47ba854283e7885aec3fa2b92f202541b1f62e'; // sha256
   const ADMIN_PW  = '3f83e9ad5be63bd5bf2fd009fffe6b7dd4066243975bc962edc37459c17e65b9'; // sha256 of admin password
   let adminUnlocked = false;
+  let _libSynced = false;
   const STORE_KEY = 'nlib_v2';
 
   // ── State ──────────────────────────────────────────────
@@ -5378,8 +5379,8 @@ const LIB = (() => {
     for (const [k,v] of Object.entries(_HARDCODED_LIBRARY)) {
       projects[k] = [...v];
     }
-    // Synk fra Supabase (asynkront)
-    syncFromSupabase();
+    // Synk fra Supabase (asynkront, kun ved oppstart)
+    if (!_libSynced) { _libSynced = true; syncFromSupabase(); }
   }
 
   // ── Login ──────────────────────────────────────────────
@@ -5397,11 +5398,13 @@ const LIB = (() => {
     crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)).then(buf => {
       const pw = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
       if (pw === ADMIN_PW) {
-        adminUnlocked = true;
         document.getElementById('lib-admin-modal').style.display = 'none';
         document.getElementById('lib-admin-input').value = '';
         document.getElementById('lib-admin-err').style.display = 'none';
-        if (_adminCallback) { _adminCallback(); _adminCallback = null; }
+        if (_adminCallback) {
+          const cb = _adminCallback; _adminCallback = null;
+          cb(); // adminUnlocked forblir false — spørres hver gang
+        }
       } else {
         document.getElementById('lib-admin-err').style.display = 'block';
         document.getElementById('lib-admin-input').select();
@@ -5410,8 +5413,7 @@ const LIB = (() => {
   }
 
   function requireAdmin(callback) {
-    if (adminUnlocked) { callback(); return; }
-    openAdminLogin(callback);
+    openAdminLogin(callback); // alltid spør om passord
   }
 
   function openLogin() {
@@ -5681,7 +5683,9 @@ const LIB = (() => {
     const n = (prompt('Mappenavn:', 'Prosjekt '+(Object.keys(projects).length+1))||'').trim();
     if (!n) return;
     if (projects[n]) { alert('Finnes allerede.'); return; }
-    projects[n] = []; save(); render();
+    requireAdmin(() => {
+      projects[n] = []; save(); render();
+    });
   }
   function renameFolder(old) {
     const n = (prompt('Nytt navn:', old)||'').trim();
