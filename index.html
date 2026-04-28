@@ -566,9 +566,11 @@ body.dark-mode .vp-ripple { border-color: rgba(241,157,13,.5); }
 #lib-close-btn:hover { background: var(--surface2); }
 #lib-body {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  -webkit-overflow-scrolling: touch;
 }
 /* Login modal */
 #lib-login-modal {
@@ -5329,9 +5331,11 @@ const LIB = (() => {
       const res = await fetch(_SB_URL + '/rest/v1/library?select=folder,model_name,url&order=created_at.asc', {
         headers: _SB_HDRS
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.error('Supabase library henting feilet:', res.status, await res.text());
+        return;
+      }
       const rows = await res.json();
-      // Bygg opp mapper fra Supabase
       for (const row of rows) {
         if (!projects[row.folder]) projects[row.folder] = [];
         if (!projects[row.folder].find(m => m.name===row.model_name)) {
@@ -5339,15 +5343,20 @@ const LIB = (() => {
         }
       }
       render();
-    } catch(e) { console.warn('Supabase library sync feilet:', e); }
+    } catch(e) { console.error('Supabase library sync feilet:', e); }
   }
 
   async function sbSaveLibraryEntry(folder, modelName, url) {
-    await fetch(_SB_URL + '/rest/v1/library', {
+    const res = await fetch(_SB_URL + '/rest/v1/library', {
       method: 'POST',
       headers: { ..._SB_HDRS, 'Prefer': 'return=minimal' },
       body: JSON.stringify({ folder, model_name: modelName, url })
     });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('sbSaveLibraryEntry feil:', res.status, err);
+      throw new Error('Kunne ikke lagre i bibliotek: ' + res.status);
+    }
   }
 
   async function sbDeleteLibraryEntry(folder, modelName) {
@@ -5729,7 +5738,8 @@ const LIB = (() => {
       );
       if (!res.ok) {
         const err = await res.text();
-        throw new Error('Opplasting feilet: ' + res.status + ' ' + err);
+        console.error('Storage upload feil:', res.status, err);
+        throw new Error('Opplasting feilet (' + res.status + '): ' + err.slice(0,120));
       }
       const publicUrl = _SB_URL + '/storage/v1/object/public/models/' + encodeURIComponent(filePath);
       projects[fname] = (projects[fname]||[]).filter(m=>m.name!==name);
@@ -5740,7 +5750,7 @@ const LIB = (() => {
       setStatus('✓ '+name+' lastet opp');
     } catch(e) {
       setStatus('⚠ '+e.message);
-      console.error(e);
+      showToast('❌ ' + e.message);
     }
   }
   function deleteModel(fname,idx) {
