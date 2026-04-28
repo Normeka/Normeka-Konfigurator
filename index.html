@@ -5281,32 +5281,53 @@ const LIB = (() => {
   // ── Persist ────────────────────────────────────────────
   function save() {
     try {
-      // Store full base64 data so models persist across sessions
-      localStorage.setItem(STORE_KEY, JSON.stringify(projects));
-    } catch(e) {
-      // localStorage might be full with large base64 data
-      console.warn('Library save failed — models may not persist:', e);
-    }
+      const light = {};
+      for (const [k,v] of Object.entries(projects)) {
+        light[k] = v.filter(m=>!m.embedded).map(m=>({name:m.name,url:m.url}));
+      }
+      localStorage.setItem(STORE_KEY, JSON.stringify(light));
+    } catch(e) {}
   }
+
+  let _libSynced = false;
+  async function syncFromSupabase() {
+    try {
+      const res = await fetch(_SB_URL + '/rest/v1/library?select=folder,model_name,url&order=created_at.asc', { headers: _SB_HDRS });
+      if (!res.ok) return;
+      const rows = await res.json();
+      for (const row of rows) {
+        if (!projects[row.folder]) projects[row.folder] = [];
+        if (!projects[row.folder].find(m => m.name===row.model_name))
+          projects[row.folder].push({ name: row.model_name, url: row.url, embedded: false });
+      }
+      render();
+    } catch(e) { console.warn('Supabase library sync feilet:', e); }
+  }
+
+  async function sbSaveLibraryEntry(folder, modelName, url) {
+    const res = await fetch(_SB_URL + '/rest/v1/library', {
+      method: 'POST',
+      headers: { ..._SB_HDRS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ folder, model_name: modelName, url })
+    });
+    if (!res.ok) console.error('sbSaveLibraryEntry feil:', res.status, await res.text());
+  }
+
+  async function sbDeleteLibraryEntry(folder, modelName) {
+    await fetch(_SB_URL + '/rest/v1/library?folder=eq.' + encodeURIComponent(folder) + '&model_name=eq.' + encodeURIComponent(modelName),
+      { method: 'DELETE', headers: _SB_HDRS });
+  }
+
+  async function sbDeleteFolderEntries(folderName) {
+    await fetch(_SB_URL + '/rest/v1/library?folder=eq.' + encodeURIComponent(folderName),
+      { method: 'DELETE', headers: _SB_HDRS });
+  }
+
   function load() {
-    // First load hardcoded models (baked into HTML by Claude)
     for (const [k,v] of Object.entries(_HARDCODED_LIBRARY)) {
       projects[k] = [...v];
     }
-    // Then merge localStorage (user-uploaded models in this browser)
-    try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return;
-      const m = JSON.parse(raw);
-      for (const [k,v] of Object.entries(m)) {
-        if (!projects[k]) projects[k] = [];
-        v.forEach(item => {
-          if (!projects[k].find(p => p.name===item.name)) {
-            projects[k].push(item);
-          }
-        });
-      }
-    } catch(e) {}
+    if (!_libSynced) { _libSynced = true; syncFromSupabase(); }
   }
 
   // ── Login ──────────────────────────────────────────────
@@ -5315,7 +5336,7 @@ const LIB = (() => {
   function requireAdmin(callback) {
     _adminCallback = callback;
     const m = document.getElementById('lib-admin-modal');
-    if(m) {
+    if (m) {
       m.style.display = 'flex';
       document.getElementById('lib-admin-err').style.display = 'none';
       document.getElementById('lib-admin-input').value = '';
@@ -5330,6 +5351,7 @@ const LIB = (() => {
       if (pw === ADMIN_PW) {
         document.getElementById('lib-admin-modal').style.display = 'none';
         document.getElementById('lib-admin-input').value = '';
+        document.getElementById('lib-admin-err').style.display = 'none';
         if (_adminCallback) { const cb = _adminCallback; _adminCallback = null; cb(); }
       } else {
         document.getElementById('lib-admin-err').style.display = 'block';
@@ -5609,17 +5631,20 @@ const LIB = (() => {
       projects[n] = []; save(); render();
     });
   }
-  function renameFolder(old) {
-    const n = (prompt('Nytt navn:', old)||'').trim();
-    if (!n || n===old) return;
-    if (projects[n]) { alert('Finnes allerede.'); return; }
-    projects[n] = projects[old]; delete projects[old];
-    if (folder===old) folder=n;
-    save(); render();
-  }
-  function deleteFolder(name) {
+  function renameFolder(oldName) {
     requireAdmin(() => {
+      const n = (prompt('Nytt navn:', oldName)||'').trim();
+      if (!n || n===oldName) return;
+      if (projects[n]) { alert('Finnes allerede.'); return; }
+      projects[n] = projects[oldName]; delete projects[oldName];
+      if (folder===oldName) folder=n;
+      save(); render();
+    });
+  }
+  async function deleteFolder(name) {
+    requireAdmin(async () => {
       if (!confirm('Slett «'+name+'»?')) return;
+      await sbDeleteFolderEntries(name);
       delete projects[name];
       if (folder===name) { view='root'; folder=null; }
       save(); render();
@@ -5630,22 +5655,33 @@ const LIB = (() => {
   function uploadFile(file, fname) {
     requireAdmin(() => {
       const name = file.name.replace(/\.glb$/i,'');
-      const reader = new FileReader();
-      reader.onload = e => {
-        const b64 = e.target.result;
+      setStatus('Laster opp: '+name+'…');
+      fetch(_SB_URL + '/storage/v1/object/models/' + encodeURIComponent(fname+'/'+file.name), {
+        method: 'POST',
+        headers: { 'apikey':_SB_KEY, 'Authorization':'Bearer '+_SB_KEY, 'Content-Type':'application/octet-stream', 'x-upsert':'true' },
+        body: file
+      }).then(async res => {
+        if (!res.ok) { showToast('❌ Opplasting feilet: '+(await res.text()).slice(0,80)); return; }
+        const publicUrl = _SB_URL + '/storage/v1/object/public/models/' + encodeURIComponent(fname+'/'+file.name);
         projects[fname] = (projects[fname]||[]).filter(m=>m.name!==name);
-        projects[fname].push({name, url: b64, embedded: true});
+        projects[fname].push({name, url: publicUrl, embedded: false});
+        await sbSaveLibraryEntry(fname, name, publicUrl);
         save(); render();
-        loadModel({name, url: b64});
-      };
-      reader.readAsDataURL(file);
+        loadModel({name, url: publicUrl});
+        setStatus('✓ '+name+' lastet opp');
+      }).catch(e => showToast('❌ '+e.message));
     });
   }
   function deleteModel(fname,idx) {
-    requireAdmin(() => {
+    requireAdmin(async () => {
       if (!confirm('Fjern modellen?')) return;
       const m = projects[fname][idx];
-      if (m&&m.url) URL.revokeObjectURL(m.url);
+      if (m && m.url && m.url.includes('supabase.co')) {
+        await sbDeleteLibraryEntry(fname, m.name);
+        const filePath = fname+'/'+m.name+'.glb';
+        await fetch(_SB_URL+'/storage/v1/object/models/'+encodeURIComponent(filePath),
+          { method:'DELETE', headers:{'apikey':_SB_KEY,'Authorization':'Bearer '+_SB_KEY} });
+      }
       projects[fname].splice(idx,1);
       save(); render();
     });
@@ -5686,7 +5722,6 @@ const LIB = (() => {
   }
   function unloadModel() {
     if (!model) return;
-    // Beholder _hiddenMeshes — unhide-knapp forblir synlig ved modelbytte
     scene.remove(model);
     model.traverse(o => {
       if (o.geometry) o.geometry.dispose();
@@ -6272,7 +6307,7 @@ function goHome() {
     <input class="lib-modal-input" id="lib-admin-input" type="password" placeholder="Admin-passord"
       onkeydown="if(event.key==='Enter')LIB.checkAdminPw()">
     <button class="lib-modal-btn" onclick="LIB.checkAdminPw()">Bekreft</button>
-    <button onclick="document.getElementById('lib-admin-modal').style.display='none';document.getElementById('lib-admin-input').value='';"
+    <button onclick="document.getElementById('lib-admin-modal').style.display='none';"
       style="width:100%;margin-top:.5rem;padding:.4rem;background:none;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-family:inherit;color:var(--muted);">Avbryt</button>
   </div>
 </div>
