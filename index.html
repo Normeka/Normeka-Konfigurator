@@ -907,7 +907,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
 </div>
 <div id="ma-overlay" style="display:none;">
   <div id="ma-panel">
-    <button id="ma-close" onclick="MA.close()">✕</button>
+    <button id="ma-close" onclick="MA.close()" title="Avslutt monteringsanvisning">✕</button>
     <div id="ma-step-label">Steg 1 av 7</div>
     <div id="ma-step-title">Gangbaneramme</div>
     <div id="ma-step-desc">Profilene kappes til ønsket lengde og bredde.</div>
@@ -916,6 +916,12 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       <button class="ma-btn ma-btn-next" id="ma-btn-next" onclick="MA.next()">Neste →</button>
       <div id="ma-progress"></div>
     </div>
+    <button onclick="MA.close()"
+      style="width:100%;margin-top:.6rem;padding:.38rem;background:rgba(255,255,255,.08);
+             border:1px solid rgba(255,255,255,.2);border-radius:7px;color:rgba(255,255,255,.7);
+             font-family:Barlow,sans-serif;font-size:.78rem;cursor:pointer;">
+      ✕ Avslutt monteringsanvisning
+    </button>
   </div>
 </div>
 
@@ -5931,8 +5937,7 @@ const LIB = (() => {
   }
   function unloadModel() {
     if (!model) return;
-    _hiddenMeshes.clear();
-    _libUpdateUnhideBtn();
+    // Ikke clear _hiddenMeshes her — unhide-knappen skal bestå ved modelbytte
     scene.remove(model);
     model.traverse(o => {
       if (o.geometry) o.geometry.dispose();
@@ -6588,11 +6593,15 @@ var MA = (() => {
 
   function close() {
     active = false;
-    loadedModels.forEach(m => scene.remove(m));
-    loadedModels = [];
     if(_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
+    // Rydd alle MA-modeller fra scenen
+    loadedModels.forEach(m => { try { scene.remove(m); } catch(e){} });
+    loadedModels = [];
+    // Vis grid igjen
     scene.traverse(o => { if(o.isGridHelper) o.visible = true; });
-    document.getElementById('ma-overlay').style.display = 'none';
+    // Skjul overlay
+    const ov = document.getElementById('ma-overlay');
+    if(ov) ov.style.display = 'none';
     // Gjenbygg gjeldende modus
     if(typeof currentMode !== 'undefined') {
       if(currentMode === 'stair') buildStair();
@@ -6610,15 +6619,37 @@ var MA = (() => {
 
   function prev() {
     if(currentStep <= 0) return;
-    const last = loadedModels.pop();
-    if(last) scene.remove(last);
     currentStep--;
-    // Gjør ny siste modell blå
-    if(loadedModels.length > 0) {
-      loadedModels.forEach((m,i) => _setModelMat(m, i===loadedModels.length-1 ? MAT_BLUE : MAT_GREY));
-    }
+    // Rydd alle MA-modeller og last steg 0..currentStep på nytt
+    loadedModels.forEach(m => scene.remove(m));
+    loadedModels = [];
+    // Last alle steg opp til og med currentStep (akkumulert, uten animasjon)
+    _reloadUpTo(currentStep);
     _updateUI();
-    if(typeof renderer !== 'undefined') renderer.render(scene, cam);
+  }
+
+  function _reloadUpTo(targetStep) {
+    if(!loader) {
+      if(typeof THREE !== 'undefined' && THREE.GLTFLoader)
+        loader = new THREE.GLTFLoader();
+      else return;
+    }
+    let loaded = 0;
+    for(let i = 0; i <= targetStep; i++) {
+      const url = SB_BASE + STEPS[i].file;
+      const isLast = (i === targetStep);
+      loader.load(url, gltf => {
+        const model = gltf.scene;
+        _setModelMat(model, isLast ? MAT_BLUE : MAT_GREY);
+        // Ingen animasjon ved re-load
+        model.userData.animating = false;
+        scene.add(model);
+        loadedModels.push(model);
+        loaded++;
+        if(loaded === targetStep + 1 && typeof renderer !== 'undefined')
+          renderer.render(scene, cam);
+      }, null, err => console.warn('MA reload feil:', err));
+    }
   }
 
   const MAT_GREY = new THREE.MeshLambertMaterial({ color: 0x8a9bb0 });
@@ -6652,21 +6683,20 @@ var MA = (() => {
       const size = new THREE.Vector3();
       box.getSize(size);
 
-      // Animér inn langs world Y-aksen (ovenfra)
-      const startY = model.position.y + size.y * 3;
-      model.position.y = startY;
-      model.userData.targetY = model.position.y - size.y * 3;
+      // Animér inn langs world Y-aksen (ovenfra) — stort offset, sakte
+      const dropHeight = Math.max(size.y * 5, 3.0);
+      model.position.y = model.position.y + dropHeight;
+      model.userData.targetY = model.position.y - dropHeight;
       model.userData.animating = true;
 
       scene.add(model);
       loadedModels.push(model);
 
-      // Flytt kamera-fokus til ny komponents senter
-      if(typeof orbitTarget !== 'undefined') {
-        orbitTarget.copy(center);
-      }
-      if(stepIdx === 0 && typeof radius !== 'undefined') {
-        radius = Math.max(size.x, size.y, size.z) * 2.5;
+      // Flytt kamera-fokus og zoom inn på ny komponent
+      if(typeof orbitTarget !== 'undefined') orbitTarget.copy(center);
+      if(typeof radius !== 'undefined') {
+        const targetR = Math.max(size.x, size.y, size.z) * 2.2;
+        radius = targetR;
         if(typeof ucam === 'function') ucam();
       }
 
@@ -6687,7 +6717,7 @@ var MA = (() => {
           m.position.y = m.userData.targetY;
           m.userData.animating = false;
         } else {
-          m.position.y += diff * 0.055; // saktere ease-out (50% av 0.12)
+          m.position.y += diff * 0.028; // langsom ease-out
           stillAnimating = true;
         }
       }
