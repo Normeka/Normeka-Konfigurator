@@ -2603,10 +2603,14 @@ function switchMode(m){
   dimActive = false;
   document.getElementById('dim-overlay').style.display = 'none';
   document.getElementById('dim-lines').innerHTML = '';
+  document.getElementById('mapanel').classList.toggle('visible', m==='ma');
   if(m==='walk'){ if(!switchMode._skipReset){WalkSegs.length=0; walkSegNextId=1;} walkDimActive=false; document.getElementById('btn-walk-dim').classList.remove('vt-active'); setView('3d');
     document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Legg til seksjoner i sidepanelet'; }
+  else if(m==='ma') { document.getElementById('canvas-hint').textContent='🔵 Blå = aktivt steg · Roter og zoom fritt'; }
   else { document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Klikk for mål'; }
-  m==='stair'?buildStair():buildWalk();
+  if(m==='stair') buildStair();
+  else if(m==='walk') buildWalk();
+  // MA: ikke bygg noe — MA.open() håndterer scenen
   if(m==='walk') setTimeout(initSketchIfNeeded, 50);
 }
 
@@ -6514,21 +6518,23 @@ var MA = (() => {
     // Rydd scenen
     if(typeof clearGrp === 'function') clearGrp();
     scene.traverse(o => { if(o.isGridHelper) o.visible = false; });
-    // Vis MA sidebar, skjul andre paneler
+    // Skjul welcome-screen, vis konfig-tab-bar
+    const ws = document.getElementById('welcome-screen');
+    if(ws) ws.style.display = 'none';
+    const tabBar = document.getElementById('konfig-tab-bar');
+    if(tabBar) tabBar.style.removeProperty('display');
+    // Vis MA panel via classList direkte
     document.getElementById('spanel').classList.remove('visible');
     document.getElementById('wpanel').classList.remove('visible');
     document.getElementById('mapanel').classList.add('visible');
-    // Vis konfig-tab-bar (for context)
-    const tabBar = document.getElementById('konfig-tab-bar');
-    if(tabBar) tabBar.style.removeProperty('display');
-    // Canvas hint
-    const hint = document.getElementById('canvas-hint');
-    if(hint) hint.textContent = '🔵 Blå = aktivt steg · Rotér og zoom fritt';
+    currentMode = 'ma';
+    document.getElementById('canvas-hint').textContent = '🔵 Blå = aktivt steg · Roter og zoom fritt';
     _loadStep(0);
     _updateUI();
   }
 
   function close() {
+    if(!active) return;
     active = false;
     if(_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
     loadedModels.forEach(m => { try { scene.remove(m); } catch(e){} });
@@ -6536,8 +6542,14 @@ var MA = (() => {
     scene.traverse(o => { if(o.isGridHelper) o.visible = true; });
     document.getElementById('mapanel').classList.remove('visible');
     if(typeof renderer !== 'undefined') renderer.render(scene, cam);
-    // Gå til startmeny
-    if(typeof goHome === 'function') goHome();
+    // Gå til startmeny direkte
+    const ws = document.getElementById('welcome-screen');
+    if(ws) ws.style.display = '';
+    ['konfig-tab-bar','view-toggle','walk-toolbar'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.style.display='none';
+    });
+    const tek=document.getElementById('tek-panel');
+    if(tek) tek.style.display='none';
   }
 
   function next() {
@@ -6705,6 +6717,8 @@ function goHome() {
   // Use classList — same mechanism as switchMode, no inline style conflict
   document.getElementById('spanel').classList.remove('visible');
   document.getElementById('wpanel').classList.remove('visible');
+  document.getElementById('mapanel').classList.remove('visible');
+  if(typeof MA !== 'undefined' && MA.isActive()) MA.close();
   document.getElementById('tab-s').className = 'mode-tab';
   document.getElementById('tab-w').className = 'mode-tab';
   // Hide toolbar elements
