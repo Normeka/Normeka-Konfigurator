@@ -6584,20 +6584,33 @@ var MA = (() => {
     active = false;
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
-    // Fjern ALLE MA-modeller fra scene
+    // Fjern ALLE MA-modeller fra scene — traverse og dispose
     if (typeof scene !== 'undefined') {
-      maModels.forEach(m => { try { scene.remove(m); } catch(e){} });
+      maModels.forEach(m => {
+        try {
+          m.traverse(o => {
+            if (o.geometry) o.geometry.dispose();
+            if (o.material) {
+              const mats = Array.isArray(o.material) ? o.material : [o.material];
+              mats.forEach(mat => mat.dispose());
+            }
+          });
+          scene.remove(m);
+        } catch(e) {}
+      });
       // Vis gulv og grid igjen
       scene.traverse(o => {
         if (o.isGridHelper) o.visible = true;
         if (o.userData && o.userData.isFloor) o.visible = true;
       });
       if (typeof floorMesh !== 'undefined' && floorMesh) floorMesh.visible = true;
+      // Tving render for å bekrefte fjerning
+      if (typeof renderer !== 'undefined') renderer.render(scene, cam);
     }
     maModels = [];
+    mGrey = null; mBlue = null;
 
     document.getElementById('mapanel').classList.remove('visible');
-    if (typeof renderer !== 'undefined') renderer.render(scene, cam);
     if (typeof goHome === 'function') goHome();
   }
 
