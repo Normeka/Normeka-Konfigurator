@@ -732,7 +732,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       style="border-color:#1a6a4a;background:linear-gradient(135deg,#f0faf5,#e6f5ee);">
       <div class="wc-icon">🔧</div>
       <div class="wc-title" style="color:#1a6a4a;">Monteringsanvisning</div>
-      <div class="wc-desc">Interaktiv 3D monteringsanvisning for Ampliform gangbanesystem.</div>
+      <div class="wc-desc">Interaktiv 3D monteringsanvisning for Ampliform gangbanesystem. Steg for steg.</div>
     </div>
   <div id="lib-welcome-card" class="welcome-card" onclick="LIB.enter()">
     <div class="wc-icon">📦</div>
@@ -1263,13 +1263,12 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         </div>
       </div>
     </div>
-  </div>
   <!-- ══ MA PANEL ══ -->
   <div class="config-panel" id="mapanel">
     <div class="ss" style="border-bottom:1px solid var(--border);padding-bottom:.9rem;">
       <div style="font-size:.62rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--nyellow);margin-bottom:.3rem;" id="ma-label">Steg 1 av 7</div>
       <div style="font-size:1.05rem;font-weight:700;color:var(--text);margin-bottom:.5rem;line-height:1.3;" id="ma-title">—</div>
-      <div style="display:flex;gap:5px;" id="ma-dots"></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;" id="ma-dots"></div>
     </div>
     <div class="ss">
       <div style="font-size:.82rem;color:var(--muted);line-height:1.65;" id="ma-desc"></div>
@@ -1293,8 +1292,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       </div>
     </div>
   </div>
-
-
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -2559,21 +2557,13 @@ function switchMode(m){
   dimActive = false;
   document.getElementById('dim-overlay').style.display = 'none';
   document.getElementById('dim-lines').innerHTML = '';
+  if(m==='walk'){ if(!switchMode._skipReset){WalkSegs.length=0; walkSegNextId=1;} walkDimActive=false; document.getElementById('btn-walk-dim').classList.remove('vt-active'); setView('3d');
+    document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Legg til seksjoner i sidepanelet'; }
+  else { document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Klikk for mål'; }
   document.getElementById('mapanel').classList.toggle('visible', m==='ma');
-  if(m==='walk'){
-    if(!switchMode._skipReset){WalkSegs.length=0; walkSegNextId=1;}
-    walkDimActive=false;
-    document.getElementById('btn-walk-dim').classList.remove('vt-active');
-    setView('3d');
-    document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Legg til seksjoner i sidepanelet';
-  } else if(m==='ma') {
-    document.getElementById('canvas-hint').textContent='🔵 Blå = aktivt steg · Roter og zoom fritt';
-  } else {
-    document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Klikk for mål';
-  }
   if(m==='stair') buildStair();
   else if(m==='walk') { buildWalk(); setTimeout(initSketchIfNeeded, 50); }
-  // m==='ma': MA._enter() kalles separat etter innlogging
+  // m==='ma': MA._enter() handles scene
 }
 
 // ─── CONTROLS ────────────────────────────────────────────
@@ -6307,294 +6297,6 @@ function _applyDarkScene(isDark) {
 
 
 
-// ═══════════════════════════════════════════════════════════════
-// MA — Monteringsanvisning
-// Separat modus. Styres kun av switchMode('ma') og MA.close().
-// ═══════════════════════════════════════════════════════════════
-var MA = (() => {
-
-  // ── Konstanter ─────────────────────────────────────────────
-  const SB    = 'https://hdfilgkrcmvvwfmtxdsm.supabase.co/storage/v1/object/public/models/monteringsanvisning/';
-  const PW_HASH = '405d6335d8f946d0536de22a7f47ba854283e7885aec3fa2b92f202541b1f62e'; // normeka2024
-  const EASE  = 0.028;   // animasjonshastighet (lavere = saktere)
-  const DROP  = 4.0;     // meter komponenten starter over endepunkt
-
-  const STEPS = [
-    { file:'01_gangbaneprofil.glb', title:'Gangbaneramme',
-      desc:'Profilene kappes til ønsket lengde og bredde. Den bærende rammen i sjøvannsbestandig aluminium har integrerte skruespor i topp og bunn for enkel tilpasning.' },
-    { file:'02_hjornemodul.glb',    title:'Hjørnemodul',
-      desc:'Endestykkene gjæres i 45°. En innvendig hjørneprofil føres inn i hulrommet og låses med grove popnagler. Dette gir en stiv og stabil hjørneløsning med repeterbar montasje.' },
-    { file:'03_understag.glb',      title:'Understag',
-      desc:'Understag monteres i skruesporet på undersiden av gangbaneprofilen for økt torsjonsstivhet. Anbefalt plassering: 1 stk. per 3 meter.' },
-    { file:'04_rister.glb',         title:'Plassering av rister',
-      desc:'Ristene skyves inn via profilens integrerte ristespor og låses mekanisk i riktig posisjon. Dette sikrer stabil innfesting uten separat festemateriell.' },
-    { file:'05_rekkverksstolper.glb', title:'Rekkverksstolper',
-      desc:'Rekkverksstolpene integreres direkte i gangbaneprofilens toppspor ved bruk av mutterskinne. Stolpene kan plasseres fritt (maks c/c 1200 mm) og låses mekanisk fra oversiden.' },
-    { file:'06_haandloper.glb',     title:'Håndløper',
-      desc:'Rekkverkssystemet kompletteres med håndløper montert på toppen av stenderne. Innfesting skjer ved boring gjennom håndløper og stender, sikret med 4,8 mm popnagler.' },
-    { file:'07_knelist.glb',        title:'Knelist og endelokk',
-      desc:'Rekkverket kompletteres med knelist festet til stenderne med 4,8 mm popnagler. Lysåpning mellom håndløper og knelist er maks 500 mm. Sorte endelokk gir ren finish.' },
-  ];
-
-  // ── State ───────────────────────────────────────────────────
-  let active     = false;
-  let step       = 0;
-  let models     = [];   // akkumulerte Three.js-objekter
-  let animFrame  = null;
-  let gltfLoader = null;
-
-  // Materialer
-  let matGrey, matBlue;
-
-  function _initMats() {
-    matGrey = new THREE.MeshLambertMaterial({ color: 0x8a9bb0 });
-    matBlue = new THREE.MeshLambertMaterial({ color: 0x2d8ccc, emissive: new THREE.Color(0x0a2a44), emissiveIntensity: 0.3 });
-  }
-
-  function _applyMat(obj, mat) {
-    obj.traverse(o => { if (o.isMesh) o.material = mat; });
-  }
-
-  // ── Innlogging ──────────────────────────────────────────────
-  function openLogin() {
-    const m = document.getElementById('ma-login-modal');
-    if (m) {
-      m.style.display = 'flex';
-      document.getElementById('ma-login-err').style.display = 'none';
-      document.getElementById('ma-login-input').value = '';
-      setTimeout(() => document.getElementById('ma-login-input').focus(), 60);
-    }
-  }
-
-  function checkLogin() {
-    const raw = document.getElementById('ma-login-input').value.trim();
-    crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)).then(buf => {
-      const pw = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
-      if (pw === PW_HASH) {
-        document.getElementById('ma-login-modal').style.display = 'none';
-        document.getElementById('ma-login-input').value = '';
-        _enter();
-      } else {
-        document.getElementById('ma-login-err').style.display = 'block';
-        document.getElementById('ma-login-input').select();
-      }
-    });
-  }
-
-  // ── Enter / Exit ────────────────────────────────────────────
-  function _enter() {
-    active = true;
-    step   = 0;
-    models = [];
-    _initMats();
-
-    // Skjul welcome-screen
-    const ws = document.getElementById('welcome-screen');
-    if (ws) ws.style.display = 'none';
-
-    // Skjul konfig-tab-bar i MA (ingen trapp/gangbane-faner)
-    const tabBar = document.getElementById('konfig-tab-bar');
-    if (tabBar) tabBar.style.display = 'none';
-    // Skjul også view-toggle og walk-toolbar
-    ['view-toggle','walk-toolbar','tek-panel'].forEach(id => {
-      const el = document.getElementById(id); if(el) el.style.display = 'none';
-    });
-
-    // Aktiver MA-modus via switchMode
-    switchMode('ma');
-
-    // Rydd scenen
-    if (typeof clearGrp === 'function') clearGrp();
-    if (typeof scene !== 'undefined') {
-      scene.traverse(o => { if (o.isGridHelper) o.visible = false; });
-    }
-
-    // Last steg 0
-    _loadStep(0);
-  }
-
-  function close() {
-    if (!active) return;
-    active = false;
-
-    // Stopp animasjon
-    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-
-    // Fjern alle MA-modeller fra scenen
-    if (typeof scene !== 'undefined') {
-      models.forEach(m => { try { scene.remove(m); } catch(e){} });
-      scene.traverse(o => { if (o.isGridHelper) o.visible = true; });
-    }
-    models = [];
-
-    // Gå til startmeny
-    if (typeof goHome === 'function') goHome();
-  }
-
-  // ── Steg-navigasjon ─────────────────────────────────────────
-  function next() {
-    if (!active) return;
-    if (step >= STEPS.length - 1) { close(); return; }
-    step++;
-    _loadStep(step);
-  }
-
-  function prev() {
-    if (!active || step <= 0) return;
-    step--;
-    // Rydd alle modeller og re-last sekvensielt uten animasjon
-    models.forEach(m => { try { scene.remove(m); } catch(e){} });
-    models = [];
-    _reloadUpTo(step);
-    _updateUI();
-  }
-
-  function _reloadUpTo(targetStep) {
-    if (!gltfLoader) {
-      if (typeof THREE !== 'undefined' && THREE.GLTFLoader) gltfLoader = new THREE.GLTFLoader();
-      else return;
-    }
-    let idx = 0;
-    function loadNext() {
-      if (idx > targetStep) {
-        if (typeof renderer !== 'undefined') renderer.render(scene, cam);
-        return;
-      }
-      const i = idx++;
-      const isLast = (i === targetStep);
-      gltfLoader.load(SB + STEPS[i].file, gltf => {
-        const obj = gltf.scene;
-        _applyMat(obj, isLast ? matBlue : matGrey);
-        // Plasser på gulvet uten animasjon
-        const box = new THREE.Box3().setFromObject(obj);
-        obj.position.y -= box.min.y;
-        obj.userData.animating = false;
-        scene.add(obj);
-        models.push(obj);
-        loadNext();
-      }, null, () => loadNext());
-    }
-    loadNext();
-  }
-
-  // ── Modellasting ────────────────────────────────────────────
-  function _loadStep(stepIdx) {
-    if (!gltfLoader) {
-      if (typeof THREE !== 'undefined' && THREE.GLTFLoader) {
-        gltfLoader = new THREE.GLTFLoader();
-      } else { console.error('GLTFLoader mangler'); return; }
-    }
-
-    // Gjør alle eksisterende modeller grå
-    models.forEach(m => _applyMat(m, matGrey));
-
-    const url = SB + STEPS[stepIdx].file;
-    _updateUI(); // oppdater UI med queuende steg
-
-    gltfLoader.load(url,
-      gltf => {
-        const obj = gltf.scene;
-        _applyMat(obj, matBlue);
-
-        // Beregn bounding box for plassering
-        const box    = new THREE.Box3().setFromObject(obj);
-        const center = new THREE.Vector3();
-        const size   = new THREE.Vector3();
-        box.getCenter(center);
-        box.getSize(size);
-
-        // Plasser på Y=0 som startnivå (bunn av modell på gulvet)
-        obj.position.y -= box.min.y;
-
-        // Start animasjon fra over
-        obj.userData.animTargetY = obj.position.y;
-        obj.position.y += DROP;
-        obj.userData.animating = true;
-
-        scene.add(obj);
-        models.push(obj);
-
-        // Kamera: zoom til hele akkumulerte systemet
-        _fitCamera();
-
-        _animate();
-        _updateUI();
-      },
-      null,
-      err => {
-        console.error('MA load feil steg', stepIdx, err);
-        if (typeof showToast === 'function') showToast('⚠ Kunne ikke laste steg ' + (stepIdx+1));
-      }
-    );
-  }
-
-  // ── Animasjon ────────────────────────────────────────────────
-  function _animate() {
-    if (animFrame) cancelAnimationFrame(animFrame);
-    const animating = models.filter(m => m.userData.animating);
-    if (animating.length === 0) return;
-
-    animFrame = requestAnimationFrame(() => {
-      let any = false;
-      for (const m of animating) {
-        const diff = m.userData.animTargetY - m.position.y;
-        if (Math.abs(diff) < 0.001) {
-          m.position.y = m.userData.animTargetY;
-          m.userData.animating = false;
-        } else {
-          m.position.y += diff * EASE;
-          any = true;
-        }
-      }
-      if (typeof renderer !== 'undefined') renderer.render(scene, cam);
-      if (any) _animate();
-    });
-  }
-
-  // ── Kamera ───────────────────────────────────────────────────
-  function _fitCamera() {
-    if (models.length === 0 || typeof scene === 'undefined') return;
-    const box = new THREE.Box3();
-    models.forEach(m => box.expandByObject(m));
-    const center = new THREE.Vector3();
-    const size   = new THREE.Vector3();
-    box.getCenter(center);
-    box.getSize(size);
-    if (typeof orbitTarget !== 'undefined') orbitTarget.copy(center);
-    if (typeof radius !== 'undefined') {
-      radius = Math.max(size.x, size.y, size.z) * 1.8;
-      if (typeof ucam === 'function') ucam();
-    }
-  }
-
-  // ── UI-oppdatering ───────────────────────────────────────────
-  function _updateUI() {
-    const s = STEPS[step];
-    const el = id => document.getElementById(id);
-
-    if (el('ma-label')) el('ma-label').textContent = 'Steg ' + (step+1) + ' av ' + STEPS.length;
-    if (el('ma-title')) el('ma-title').textContent = s.title;
-    if (el('ma-desc'))  el('ma-desc').textContent  = s.desc;
-
-    // Navigasjonsknapper
-    if (el('ma-prev')) el('ma-prev').disabled = step === 0;
-    if (el('ma-next')) {
-      el('ma-next').textContent = step === STEPS.length - 1 ? '✓ Ferdig' : 'Neste steg →';
-    }
-
-    // Progress-prikker
-    if (el('ma-dots')) {
-      el('ma-dots').innerHTML = STEPS.map((_, i) => {
-        const col = i < step ? 'var(--nblue)' : i === step ? '#2d8ccc' : 'var(--border2)';
-        const sz  = i === step ? '10px' : '7px';
-        return `<div style="width:${sz};height:${sz};border-radius:50%;background:${col};transition:all .2s;flex-shrink:0;"></div>`;
-      }).join('');
-    }
-  }
-
-  return { openLogin, checkLogin, next, prev, close, isActive: () => active };
-})();
-
 function goHome() {
   // Exit library if active
   if (typeof LIB !== 'undefined' && LIB.isActive()) LIB.exit();
@@ -6651,7 +6353,7 @@ function goHome() {
 <div id="ma-login-modal" style="position:fixed;inset:0;z-index:1001;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;">
   <div class="lib-modal-box" style="min-width:280px;">
     <div class="lib-modal-title">🔧 Monteringsanvisning</div>
-    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.8rem;">Skriv inn passord for å åpne monteringsanvisningen.</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.8rem;">Skriv inn passord for å åpne.</div>
     <div class="lib-modal-err" id="ma-login-err" style="display:none;">Feil passord</div>
     <input class="lib-modal-input" id="ma-login-input" type="password" placeholder="Passord"
       onkeydown="if(event.key==='Enter')MA.checkLogin()">
@@ -6770,5 +6472,275 @@ document.addEventListener('keydown', function(e){
 });
 </script>
 
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// MA — Monteringsanvisning v4
+// ═══════════════════════════════════════════════════════════════
+var MA = (() => {
+  const SB       = 'https://hdfilgkrcmvvwfmtxdsm.supabase.co/storage/v1/object/public/models/monteringsanvisning/';
+  const PW_HASH  = '405d6335d8f946d0536de22a7f47ba854283e7885aec3fa2b92f202541b1f62e';
+  const EASE     = 0.03;
+  const DROP     = 5.0;
+
+  const STEPS = [
+    { file:'01_gangbaneprofil.glb', title:'Gangbaneramme',
+      desc:'Profilene kappes til ønsket lengde og bredde. Den bærende rammen i sjøvannsbestandig aluminium har integrerte skruespor i topp og bunn for montering av rekkverk og rister.' },
+    { file:'02_hjornemodul.glb', title:'Hjørnemodul',
+      desc:'Endestykkene gjæres i 45°. En innvendig hjørneprofil føres inn i hulrommet og låses med grove popnagler. Gir stiv og repeterbar hjørneløsning.' },
+    { file:'03_understag.glb', title:'Understag',
+      desc:'Understag monteres i skruesporet på undersiden — 1 stk. per 3 meter. Bidrar til økt torsjonsstivhet i konstruksjonen.' },
+    { file:'04_rister.glb', title:'Plassering av rister',
+      desc:'Ristene skyves inn via profilens integrerte ristespor og låses mekanisk. Ingen separat festemateriell nødvendig.' },
+    { file:'05_rekkverksstolper.glb', title:'Rekkverksstolper',
+      desc:'Stolpene integreres i gangbaneprofilens toppspor via mutterskinne. Kan plasseres fritt — maks c/c 1200 mm.' },
+    { file:'06_haandloper.glb', title:'Håndløper',
+      desc:'Håndløper monteres på toppen av stenderne og festes med 4,8 mm popnagler gjennom håndløper og stender.' },
+    { file:'07_knelist.glb', title:'Knelist og endelokk',
+      desc:'Knelist festes til stenderne med 4,8 mm popnagler. Maks lysåpning mellom håndløper og knelist: 500 mm.' },
+  ];
+
+  let active    = false;
+  let step      = 0;
+  let maModels  = [];
+  let animFrame = null;
+  let loader    = null;
+  const matGrey = () => new THREE.MeshLambertMaterial({ color: 0x8a9bb0 });
+  const matBlue = () => new THREE.MeshLambertMaterial({ color: 0x2d8ccc, emissive: new THREE.Color(0x0a2a44), emissiveIntensity: 0.35 });
+  let mGrey, mBlue;
+
+  function _mat(obj, m) { obj.traverse(o => { if (o.isMesh) o.material = m; }); }
+
+  // ── Login ────────────────────────────────────────────────────
+  function openLogin() {
+    const m = document.getElementById('ma-login-modal');
+    if (!m) return;
+    m.style.display = 'flex';
+    document.getElementById('ma-login-err').style.display = 'none';
+    document.getElementById('ma-login-input').value = '';
+    setTimeout(() => document.getElementById('ma-login-input').focus(), 60);
+  }
+
+  function checkLogin() {
+    const raw = document.getElementById('ma-login-input').value.trim();
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)).then(buf => {
+      const pw = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+      if (pw === PW_HASH) {
+        document.getElementById('ma-login-modal').style.display = 'none';
+        document.getElementById('ma-login-input').value = '';
+        _enter();
+      } else {
+        document.getElementById('ma-login-err').style.display = 'block';
+        document.getElementById('ma-login-input').select();
+      }
+    });
+  }
+
+  // ── Enter ────────────────────────────────────────────────────
+  function _enter() {
+    active = true; step = 0; maModels = [];
+    mGrey = matGrey(); mBlue = matBlue();
+
+    // Skjul welcome-screen
+    const ws = document.getElementById('welcome-screen');
+    if (ws) ws.style.display = 'none';
+
+    // Skjul uønskede elementer
+    ['konfig-tab-bar','view-toggle','walk-toolbar','tek-panel'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+
+    // Rydd scene
+    if (typeof clearGrp === 'function') clearGrp();
+
+    // Skjul gulv og grid
+    if (typeof scene !== 'undefined') {
+      scene.traverse(o => {
+        if (o.isGridHelper) o.visible = false;
+        if (o.userData && o.userData.isFloor) o.visible = false;
+      });
+      // Finn og skjul floor mesh direkte
+      if (typeof floorMesh !== 'undefined' && floorMesh) floorMesh.visible = false;
+    }
+
+    // Vis MA panel
+    document.getElementById('spanel').classList.remove('visible');
+    document.getElementById('wpanel').classList.remove('visible');
+    document.getElementById('mapanel').classList.add('visible');
+    currentMode = 'ma';
+
+    // Sett kamera til god startposisjon
+    if (typeof phi !== 'undefined') { phi = Math.PI / 4; theta = Math.PI / 6; }
+    if (typeof radius !== 'undefined') radius = 8;
+    if (typeof ucam === 'function') ucam();
+
+    document.getElementById('canvas-hint').textContent = '🔵 Blå = aktivt steg · Roter og zoom fritt';
+    _loadStep(0);
+  }
+
+  // ── Close ────────────────────────────────────────────────────
+  function close() {
+    if (!active) return;
+    active = false;
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+
+    // Fjern ALLE MA-modeller fra scene
+    if (typeof scene !== 'undefined') {
+      maModels.forEach(m => { try { scene.remove(m); } catch(e){} });
+      // Vis gulv og grid igjen
+      scene.traverse(o => {
+        if (o.isGridHelper) o.visible = true;
+        if (o.userData && o.userData.isFloor) o.visible = true;
+      });
+      if (typeof floorMesh !== 'undefined' && floorMesh) floorMesh.visible = true;
+    }
+    maModels = [];
+
+    document.getElementById('mapanel').classList.remove('visible');
+    if (typeof renderer !== 'undefined') renderer.render(scene, cam);
+    if (typeof goHome === 'function') goHome();
+  }
+
+  // ── Navigation ───────────────────────────────────────────────
+  function next() {
+    if (!active) return;
+    if (step >= STEPS.length - 1) { close(); return; }
+    step++;
+    _loadStep(step);
+  }
+
+  function prev() {
+    if (!active || step <= 0) return;
+    // Fjern siste og re-last alt opp til step-1
+    step--;
+    maModels.forEach(m => { try { scene.remove(m); } catch(e){} });
+    maModels = [];
+    _reloadUpTo(step);
+    _updateUI();
+  }
+
+  function _reloadUpTo(target) {
+    if (!loader) { loader = new THREE.GLTFLoader(); }
+    let idx = 0;
+    function next() {
+      if (idx > target) {
+        if (typeof renderer !== 'undefined') renderer.render(scene, cam);
+        return;
+      }
+      const i = idx++;
+      loader.load(SB + STEPS[i].file, gltf => {
+        const obj = gltf.scene;
+        _mat(obj, i === target ? mBlue : mGrey);
+        const box = new THREE.Box3().setFromObject(obj);
+        obj.position.y -= box.min.y;
+        obj.userData.maModel = true;
+        obj.userData.animating = false;
+        scene.add(obj);
+        maModels.push(obj);
+        next();
+      }, null, () => next());
+    }
+    next();
+  }
+
+  // ── Load step ────────────────────────────────────────────────
+  function _loadStep(stepIdx) {
+    if (!loader) { loader = new THREE.GLTFLoader(); }
+
+    // Gjør eksisterende grå
+    maModels.forEach(m => _mat(m, mGrey));
+    _updateUI();
+
+    loader.load(SB + STEPS[stepIdx].file,
+      gltf => {
+        const obj = gltf.scene;
+        _mat(obj, mBlue);
+
+        // Plasser med bunn på Y=0
+        const box = new THREE.Box3().setFromObject(obj);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        obj.position.y -= box.min.y;
+
+        // Animer inn fra over
+        obj.userData.maModel = true;
+        obj.userData.animTargetY = obj.position.y;
+        obj.position.y += Math.max(DROP, size.y * 4);
+        obj.userData.animating = true;
+
+        scene.add(obj);
+        maModels.push(obj);
+
+        _fitCamera();
+        _animate();
+        _updateUI();
+      },
+      null,
+      err => {
+        console.error('MA load error step', stepIdx, err);
+        if (typeof showToast === 'function') showToast('⚠ Kunne ikke laste steg ' + (stepIdx+1));
+      }
+    );
+  }
+
+  // ── Animation ────────────────────────────────────────────────
+  function _animate() {
+    if (animFrame) cancelAnimationFrame(animFrame);
+    const pending = maModels.filter(m => m.userData.animating);
+    if (!pending.length) return;
+    animFrame = requestAnimationFrame(() => {
+      let any = false;
+      pending.forEach(m => {
+        const diff = m.userData.animTargetY - m.position.y;
+        if (Math.abs(diff) < 0.001) {
+          m.position.y = m.userData.animTargetY;
+          m.userData.animating = false;
+        } else {
+          m.position.y += diff * EASE;
+          any = true;
+        }
+      });
+      if (typeof renderer !== 'undefined') renderer.render(scene, cam);
+      if (any) _animate();
+    });
+  }
+
+  // ── Camera ───────────────────────────────────────────────────
+  function _fitCamera() {
+    if (!maModels.length) return;
+    const box = new THREE.Box3();
+    maModels.forEach(m => box.expandByObject(m));
+    const center = new THREE.Vector3();
+    const size   = new THREE.Vector3();
+    box.getCenter(center);
+    box.getSize(size);
+    if (typeof orbitTarget !== 'undefined') orbitTarget.copy(center);
+    if (typeof radius !== 'undefined') {
+      radius = Math.max(size.x, size.y, size.z) * 2.0;
+      if (typeof ucam === 'function') ucam();
+    }
+  }
+
+  // ── UI ───────────────────────────────────────────────────────
+  function _updateUI() {
+    const s  = STEPS[step];
+    const el = id => document.getElementById(id);
+    if (el('ma-label')) el('ma-label').textContent = 'Steg ' + (step+1) + ' av ' + STEPS.length;
+    if (el('ma-title')) el('ma-title').textContent = s.title;
+    if (el('ma-desc'))  el('ma-desc').textContent  = s.desc;
+    if (el('ma-prev'))  el('ma-prev').disabled      = step === 0;
+    if (el('ma-next'))  el('ma-next').textContent   = step === STEPS.length-1 ? '✓ Ferdig' : 'Neste steg →';
+    if (el('ma-dots')) {
+      el('ma-dots').innerHTML = STEPS.map((_, i) => {
+        const bg = i < step ? 'var(--nblue)' : i === step ? '#2d8ccc' : 'var(--border2)';
+        const sz = i === step ? '10px' : '7px';
+        return `<div style="width:${sz};height:${sz};border-radius:50%;background:${bg};transition:all .2s;flex-shrink:0;margin-top:${i===step?'0':'1.5px'}"></div>`;
+      }).join('');
+    }
+  }
+
+  return { openLogin, checkLogin, next, prev, close, isActive: () => active };
+})();
+</script>
 </body>
 </html>
