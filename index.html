@@ -728,10 +728,9 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       <div class="wc-title">Gangbanekonfigurator</div>
       <div class="wc-desc">Konfigurer gangbaner, bæring, rekkverk og rist for industri, fiskeoppdrett eller bru.</div>
     </div>
-    <div class="welcome-card" onclick="MA.openLogin()"
-      style="border-color:#1a6a4a;background:linear-gradient(135deg,#f0faf5,#e6f5ee);">
+    <div class="welcome-card" onclick="MA.openLogin()">
       <div class="wc-icon">🔧</div>
-      <div class="wc-title" style="color:#1a6a4a;">Monteringsanvisning</div>
+      <div class="wc-title">Monteringsanvisning</div>
       <div class="wc-desc">Interaktiv 3D monteringsanvisning for Ampliform gangbanesystem. Steg for steg.</div>
     </div>
   <div id="lib-welcome-card" class="welcome-card" onclick="LIB.enter()">
@@ -2542,6 +2541,10 @@ let currentMode='stair';
 
 
 function switchMode(m){
+  // Rydd MA-geometri hvis vi bytter vekk fra MA
+  if (typeof MA !== 'undefined' && MA.isActive()) {
+    MA._cleanup();
+  }
   currentMode=m;
   document.getElementById('spanel').classList.toggle('visible',m==='stair');
   document.getElementById('wpanel').classList.toggle('visible',m==='walk');
@@ -6584,33 +6587,8 @@ var MA = (() => {
     active = false;
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 
-    // Fjern ALLE MA-modeller fra scene — traverse og dispose
-    if (typeof scene !== 'undefined') {
-      maModels.forEach(m => {
-        try {
-          m.traverse(o => {
-            if (o.geometry) o.geometry.dispose();
-            if (o.material) {
-              const mats = Array.isArray(o.material) ? o.material : [o.material];
-              mats.forEach(mat => mat.dispose());
-            }
-          });
-          scene.remove(m);
-        } catch(e) {}
-      });
-      // Vis gulv og grid igjen
-      scene.traverse(o => {
-        if (o.isGridHelper) o.visible = true;
-        if (o.userData && o.userData.isFloor) o.visible = true;
-      });
-      if (typeof floorMesh !== 'undefined' && floorMesh) floorMesh.visible = true;
-      // Tving render for å bekrefte fjerning
-      if (typeof renderer !== 'undefined') renderer.render(scene, cam);
-    }
-    maModels = [];
-    mGrey = null; mBlue = null;
-
-    document.getElementById('mapanel').classList.remove('visible');
+    _cleanup();
+    if (typeof renderer !== 'undefined') renderer.render(scene, cam);
     if (typeof goHome === 'function') goHome();
   }
 
@@ -6752,7 +6730,40 @@ var MA = (() => {
     }
   }
 
-  return { openLogin, checkLogin, next, prev, close, isActive: () => active };
+  function _cleanup() {
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+    if (typeof scene !== 'undefined') {
+      maModels.forEach(m => {
+        try {
+          m.traverse(o => {
+            if (o.geometry) o.geometry.dispose();
+            if (o.material) {
+              const mats = Array.isArray(o.material) ? o.material : [o.material];
+              mats.forEach(mat => mat.dispose());
+            }
+          });
+          scene.remove(m);
+        } catch(e) {}
+      });
+      scene.traverse(o => {
+        if (o.isGridHelper) o.visible = true;
+        if (o.userData && o.userData.isFloor) o.visible = true;
+      });
+      if (typeof floorMesh !== 'undefined' && floorMesh) floorMesh.visible = true;
+    }
+    maModels = [];
+    mGrey = null; mBlue = null;
+    active = false;
+    const mp = document.getElementById('mapanel');
+    if (mp) mp.classList.remove('visible');
+    // Vis konfig-tab-bar igjen
+    ['konfig-tab-bar'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.removeProperty('display');
+    });
+  }
+
+  return { openLogin, checkLogin, next, prev, close, _cleanup, isActive: () => active };
 })();
 </script>
 </body>
