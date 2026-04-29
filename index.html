@@ -5337,6 +5337,7 @@ const LIB = (() => {
       const rows = await res.json();
       for (const row of rows) {
         if (!projects[row.folder]) projects[row.folder] = [];
+        if (row.model_name === '__folder__') continue; // tom mappe placeholder
         if (!projects[row.folder].find(m => m.name===row.model_name))
           projects[row.folder].push({ name: row.model_name, url: row.url, embedded: false });
       }
@@ -5668,7 +5669,10 @@ const LIB = (() => {
       const n = (prompt('Mappenavn:', 'Prosjekt '+(Object.keys(projects).length+1))||'').trim();
       if (!n) return;
       if (projects[n]) { alert('Finnes allerede.'); return; }
-      projects[n] = []; save(); render();
+      projects[n] = [];
+      // Lagre tom mappe i Supabase med en placeholder-rad
+      sbSaveLibraryEntry(n, '__folder__', '__empty__').catch(() => {});
+      save(); render();
     });
   }
   function renameFolder(oldName) {
@@ -5684,7 +5688,7 @@ const LIB = (() => {
   async function deleteFolder(name) {
     requireAdmin(async () => {
       if (!confirm('Slett «'+name+'»?')) return;
-      await sbDeleteFolderEntries(name);
+      await sbDeleteFolderEntries(name); // sletter alle rader inkl placeholder
       delete projects[name];
       if (folder===name) { view='root'; folder=null; }
       save(); render();
