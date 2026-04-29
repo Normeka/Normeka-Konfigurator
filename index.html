@@ -6392,9 +6392,13 @@ var MA = (() => {
     const ws = document.getElementById('welcome-screen');
     if (ws) ws.style.display = 'none';
 
-    // Vis header og konfig-tab-bar
+    // Skjul konfig-tab-bar i MA (ingen trapp/gangbane-faner)
     const tabBar = document.getElementById('konfig-tab-bar');
-    if (tabBar) tabBar.style.removeProperty('display');
+    if (tabBar) tabBar.style.display = 'none';
+    // Skjul også view-toggle og walk-toolbar
+    ['view-toggle','walk-toolbar','tek-panel'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.style.display = 'none';
+    });
 
     // Aktiver MA-modus via switchMode
     switchMode('ma');
@@ -6437,16 +6441,40 @@ var MA = (() => {
 
   function prev() {
     if (!active || step <= 0) return;
-    // Fjern siste modell
-    const last = models.pop();
-    if (last && typeof scene !== 'undefined') scene.remove(last);
     step--;
-    // Gjør ny siste modell blå
-    if (models.length > 0) {
-      models.forEach((m, i) => _applyMat(m, i === models.length - 1 ? matBlue : matGrey));
-    }
+    // Rydd alle modeller og re-last sekvensielt uten animasjon
+    models.forEach(m => { try { scene.remove(m); } catch(e){} });
+    models = [];
+    _reloadUpTo(step);
     _updateUI();
-    if (typeof renderer !== 'undefined') renderer.render(scene, cam);
+  }
+
+  function _reloadUpTo(targetStep) {
+    if (!gltfLoader) {
+      if (typeof THREE !== 'undefined' && THREE.GLTFLoader) gltfLoader = new THREE.GLTFLoader();
+      else return;
+    }
+    let idx = 0;
+    function loadNext() {
+      if (idx > targetStep) {
+        if (typeof renderer !== 'undefined') renderer.render(scene, cam);
+        return;
+      }
+      const i = idx++;
+      const isLast = (i === targetStep);
+      gltfLoader.load(SB + STEPS[i].file, gltf => {
+        const obj = gltf.scene;
+        _applyMat(obj, isLast ? matBlue : matGrey);
+        // Plasser på gulvet uten animasjon
+        const box = new THREE.Box3().setFromObject(obj);
+        obj.position.y -= box.min.y;
+        obj.userData.animating = false;
+        scene.add(obj);
+        models.push(obj);
+        loadNext();
+      }, null, () => loadNext());
+    }
+    loadNext();
   }
 
   // ── Modellasting ────────────────────────────────────────────
