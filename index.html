@@ -1080,11 +1080,24 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       </div>
 
       <div class="ss">
+        <div class="st sa">🔗 Del konfigurasjon</div>
+        <div style="font-size:.74rem;color:var(--muted);margin-bottom:.5rem;">Generer en kort ID du kan sende til kollega. De limer den inn nedenfor.</div>
+        <button class="obtn obs" style="background:var(--surface2);color:var(--nblue);border:1.5px solid var(--nblue);" onclick="shareConfigStair()">🔗 Generer delelink →</button>
+        <div id="s-share-wrap" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:#eaf2f7;border-radius:7px;border:1px solid var(--nblue);">
+          <div style="font-size:.65rem;font-weight:700;color:var(--nblue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.4rem;">Del denne ID-en</div>
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <div style="font-family:monospace;font-size:1rem;font-weight:700;color:var(--nblue);flex:1;letter-spacing:.05em;" id="s-share-id">—</div>
+            <button onclick="copyShareId('s')" style="flex-shrink:0;padding:.3rem .7rem;background:var(--nblue);color:#fff;border:none;border-radius:5px;font-size:.78rem;cursor:pointer;font-weight:600;">📋 Kopier</button>
+          </div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:.3rem;">Gyldig i 90 dager</div>
+        </div>
+      </div>
+      <div class="ss">
         <div class="st sa">Last inn konfigurasjon</div>
         <div class="ff"><label>Konfigurasjon-ID</label><input type="text" id="load-config-input" placeholder="TRP-XXXX" style="font-family:monospace;font-size:.8rem;"></div>
         <button class="obtn obs" style="background:var(--surface2);color:var(--nblue);border:1.5px solid var(--nblue);" onclick="loadConfigById()">Last inn konfigurasjon →</button>
         <div id="s-excel-wrap" style="display:none;margin-top:.5rem;">
-          <button onclick="generateExcel()" style="width:100%;padding:.45rem .7rem;background:#f0f7e8;border:1px solid var(--ngreen);border-radius:8px;font-size:.8rem;color:var(--ngreen);cursor:pointer;font-family:'Barlow',sans-serif;">⬇ Last ned materialliste som Excel (.xlsx)</button>
+          <button onclick="requireExcelLogin()" style="width:100%;padding:.45rem .7rem;background:#f0f7e8;border:1px solid var(--ngreen);border-radius:8px;font-size:.8rem;color:var(--ngreen);cursor:pointer;font-family:'Barlow',sans-serif;">⬇ Last ned materialliste som Excel (.xlsx)</button>
           <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">Én fane per konfigurasjon — klar for ERP-import</div>
         </div>
       </div>
@@ -1253,11 +1266,24 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       </div>
 
       <div class="ss">
+        <div class="st wa">🔗 Del konfigurasjon</div>
+        <div style="font-size:.74rem;color:var(--muted);margin-bottom:.5rem;">Generer en kort ID du kan sende til kollega.</div>
+        <button class="obtn obw" style="background:var(--surface2);color:var(--ngreen);border:1.5px solid var(--ngreen);" onclick="shareConfigWalk()">🔗 Generer delelink →</button>
+        <div id="w-share-wrap" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:#f3f8ec;border-radius:7px;border:1px solid var(--ngreen);">
+          <div style="font-size:.65rem;font-weight:700;color:var(--ngreen);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.4rem;">Del denne ID-en</div>
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <div style="font-family:monospace;font-size:1rem;font-weight:700;color:var(--ngreen);flex:1;letter-spacing:.05em;" id="w-share-id">—</div>
+            <button onclick="copyShareId('w')" style="flex-shrink:0;padding:.3rem .7rem;background:var(--ngreen);color:#fff;border:none;border-radius:5px;font-size:.78rem;cursor:pointer;font-weight:600;">📋 Kopier</button>
+          </div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:.3rem;">Gyldig i 90 dager</div>
+        </div>
+      </div>
+      <div class="ss">
         <div class="st wa">Last inn konfigurasjon</div>
         <div class="ff"><label>Konfigurasjon-ID</label><input type="text" id="load-config-input-w" placeholder="GBN-XXXX" style="font-family:monospace;font-size:.8rem;"></div>
         <button class="obtn obw" style="background:var(--surface2);color:var(--ngreen);border:1.5px solid var(--ngreen);" onclick="loadConfigByIdW()">Last inn konfigurasjon →</button>
         <div id="w-excel-wrap" style="display:none;margin-top:.5rem;">
-          <button onclick="generateExcel()" style="width:100%;padding:.45rem .7rem;background:#f0f7e8;border:1px solid var(--ngreen);border-radius:8px;font-size:.8rem;color:var(--ngreen);cursor:pointer;font-family:'Barlow',sans-serif;">⬇ Last ned materialliste som Excel (.xlsx)</button>
+          <button onclick="requireExcelLogin()" style="width:100%;padding:.45rem .7rem;background:#f0f7e8;border:1px solid var(--ngreen);border-radius:8px;font-size:.8rem;color:var(--ngreen);cursor:pointer;font-family:'Barlow',sans-serif;">⬇ Last ned materialliste som Excel (.xlsx)</button>
           <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">Én fane per konfigurasjon — klar for ERP-import</div>
         </div>
       </div>
@@ -6303,6 +6329,58 @@ function _applyDarkScene(isDark) {
 // Alltid lys modus ved oppstart
 
 
+
+// ── Deling ──────────────────────────────────────────────────
+async function shareConfigStair() {
+  try {
+    showToast('Genererer ID…');
+    const state = {...S, _repos:{...REPOS,
+      reposRailExcluded:[...S.reposRailExcluded]},
+      _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
+    const id = await sbSaveConfig('TRP', state);
+    document.getElementById('s-share-id').textContent = id;
+    document.getElementById('s-share-wrap').style.display = '';
+    showToast('🔗 ID klar: ' + id);
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function shareConfigWalk() {
+  try {
+    showToast('Genererer ID…');
+    const id = await sbSaveConfig('GBN', {...W, _mode:'walk'});
+    document.getElementById('w-share-id').textContent = id;
+    document.getElementById('w-share-wrap').style.display = '';
+    showToast('🔗 ID klar: ' + id);
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+function copyShareId(mode) {
+  const el = document.getElementById(mode === 's' ? 's-share-id' : 'w-share-id');
+  const id = el ? el.textContent.trim() : '';
+  if (!id || id === '—') return;
+  navigator.clipboard.writeText(id)
+    .then(() => showToast('📋 Kopiert: ' + id))
+    .catch(() => prompt('Kopier ID:', id));
+}
+
+// ── Excel med passord ────────────────────────────────────────
+const _EXCEL_HASH = '405d6335d8f946d0536de22a7f47ba854283e7885aec3fa2b92f202541b1f62e'; // normeka2024
+let _excelUnlocked = false;
+
+function requireExcelLogin() {
+  if (_excelUnlocked) { generateExcel(); return; }
+  const pw = prompt('Passord for å laste ned materialliste:');
+  if (!pw) return;
+  crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw.trim())).then(buf => {
+    const hash = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    if (hash === _EXCEL_HASH) {
+      _excelUnlocked = true;
+      generateExcel();
+    } else {
+      showToast('❌ Feil passord');
+    }
+  });
+}
 
 function goHome() {
   // Exit library if active
