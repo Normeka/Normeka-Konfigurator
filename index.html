@@ -461,6 +461,8 @@ body.dark-mode .vp-ripple { border-color: rgba(241,157,13,.5); }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <style id="lib-css">
 /* 3D LIBRARY — position:fixed, completely independent of app grid */
@@ -1099,6 +1101,8 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div id="s-excel-wrap" style="display:none;margin-top:.5rem;">
           <button onclick="requireExcelLogin()" style="width:100%;padding:.45rem .7rem;background:#f0f7e8;border:1px solid var(--ngreen);border-radius:8px;font-size:.8rem;color:var(--ngreen);cursor:pointer;font-family:'Barlow',sans-serif;">⬇ Last ned materialliste som Excel (.xlsx)</button>
           <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">Én fane per konfigurasjon — klar for ERP-import</div>
+          <button onclick="exportGLB()" style="width:100%;margin-top:.4rem;padding:.45rem .7rem;background:#f0f4ff;border:1px solid #4a6fdc;border-radius:8px;font-size:.8rem;color:#4a6fdc;cursor:pointer;font-family:'Barlow',sans-serif;">⬇ Last ned 3D-modell som GLB</button>
+          <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">BIM-kompatibel 3D-geometri · Én fil per konfigurasjon</div>
         </div>
       </div>
     </div>
@@ -6380,6 +6384,98 @@ function requireExcelLogin() {
       showToast('❌ Feil passord');
     }
   });
+}
+
+// ── GLB Eksport ─────────────────────────────────────────────
+async function exportGLB() {
+  if (!THREE.GLTFExporter) { showToast('⚠ GLTFExporter ikke lastet'); return; }
+  
+  // Samle alle konfigurasjoner
+  konfigSaveCurrent();
+  const configs = _konfigList.length > 0 ? _konfigList : null;
+  
+  if (!configs || configs.length === 0) {
+    showToast('⚠ Ingen konfigurasjoner å eksportere'); return;
+  }
+
+  showToast('Genererer GLB' + (configs.length > 1 ? '-filer…' : '…'));
+
+  const exporter = new THREE.GLTFExporter();
+  
+  if (configs.length === 1) {
+    // Én konfigurasjon — eksporter direkte
+    _exportSingleConfig(exporter, configs[0], config => {
+      _downloadBlob(config.blob, config.name + '.glb');
+      showToast('✓ ' + config.name + '.glb lastet ned');
+    });
+  } else {
+    // Flere — pakk i ZIP
+    const zip = new JSZip();
+    let done = 0;
+    configs.forEach(k => {
+      _exportSingleConfig(exporter, k, config => {
+        zip.file(config.name + '.glb', config.blob);
+        done++;
+        if (done === configs.length) {
+          zip.generateAsync({ type: 'blob' }).then(zipBlob => {
+            _downloadBlob(zipBlob, 'Normeka-konfigurasjoner.zip');
+            showToast('✓ ' + done + ' GLB-filer lastet ned som ZIP');
+          });
+        }
+      });
+    });
+  }
+}
+
+function _exportSingleConfig(exporter, konfig, callback) {
+  // Bygg scene for denne konfigurasjonen
+  const tempScene = new THREE.Scene();
+  const S_orig = konfig.snapS;
+  const W_orig = konfig.snapW;
+  const R_orig = konfig.snapREPOS;
+
+  // Lagre nåværende state
+  const savedS = JSON.parse(JSON.stringify({...S, reposRailExcluded:[...S.reposRailExcluded], flightRailExcluded:[...S.flightRailExcluded]}));
+  const savedMode = currentMode;
+
+  // Applyn konfig-state midlertidig
+  const isStair = konfig.mode === 'stair';
+  
+  if (isStair) {
+    applyStairState(S_orig);
+    buildStair();
+  } else {
+    applyWalkState(W_orig);
+    buildWalk();
+  }
+
+  // Klon grp inn i tempScene
+  if (grp) {
+    const clone = grp.clone();
+    tempScene.add(clone);
+  }
+
+  // Label for filnavn
+  const label = konfig.label || (isStair ? 'Trapp' : 'Gangbane');
+  const safeName = label.replace(/[^a-zA-Z0-9æøåÆØÅ\-_]/g, '_');
+
+  exporter.parse(
+    tempScene,
+    result => {
+      const blob = new Blob([result], { type: 'model/gltf-binary' });
+      callback({ blob, name: safeName });
+    },
+    { binary: true }
+  );
+}
+
+function _downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function goHome() {
