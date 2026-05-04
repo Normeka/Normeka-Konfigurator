@@ -1978,6 +1978,7 @@ function buildStair(){
   if(S.type === 'straight'){
     buildFlight(grp, 0, 0, 0, n, sh, 0, n, true, 1, inntrinn);
     storeDims({type:'straight', H:S.heightCm/100, Wm, widthMm:S.widthMm, runLen:n*inntrinn});
+    window._stair2D = { f1:{n, sh, inntrinn, sd:P.TRINN_W} };
 
   } else if(S.type === 'r90r' || S.type === 'r90l'){
     const sign       = S.type === 'r90r' ? 1 : -1;
@@ -2026,6 +2027,8 @@ function buildStair(){
     storeDims({type:S.type, H:S.heightCm/100, Wm, VANG_W:P.VANG_W,
                rB, rD, platY, reposZ, f1xOff, f2StartZ,
                f2H:f2H_r90, reposTopY:platY+P.NRM_H});
+    window._stair2D = { f1:{n:half, sh, inntrinn, sd:P.TRINN_W},
+                        f2:{n:f2n_r90-f2half_r90, sh:f2sh_r90, inntrinn:S.f2independent?inntrinn2:inntrinn, sd:P.TRINN_W} };
     // Coordinate system (repos centred at X=0, front at Z=reposZ, back at Z=reposZ-rD):
     //   Flight 1: runs +Z toward repos, arrives at Z=reposZ, centered at X=f1xOff
     //             Gap on front face: X=[f1xOff-Wm/2 .. f1xOff+Wm/2]
@@ -2151,6 +2154,7 @@ function buildStair(){
                reposW, reposDepth, platY, reposZFront, reposX1, f2cx,
                f2H:(S.f2independent?S.height2Cm:S.heightCm)/100,
                reposTopY:platY+P.NRM_H});
+    window._stair2D = { f1:{n:half, sh, inntrinn, sd:P.TRINN_W}, f2:{n:f2steps180, sh:f2riser180, inntrinn:S.f2independent?inntrinn2:inntrinn, sd:P.TRINN_W} };
   }
 
   // Center model and aim camera
@@ -2395,9 +2399,11 @@ function buildWalk(){
 
 // ─── TEK17 + SUMMARY ─────────────────────────────────────
 function tekCheck(innMm, oppMm, angle, suffix){
-  const formula   = 2 * oppMm + innMm; // innMm er 249.5 for Normeka-profil
+  const formula   = 2 * oppMm + innMm;
   const formulaOk = formula >= 600 && formula <= 640;
-  const innOk     = innMm >= 250;   // TEK17: inntrinn ≥ 250mm
+  // TEK17: inntrinn må være flush = nøyaktig profil-bredde (250mm).
+  // Mindre = overlapp, større = gap — begge utenfor TEK17.
+  const innOk     = Math.abs(innMm - Math.round(P.TRINN_W*1000)) <= 2; // ±2mm toleranse
   const oppOk     = oppMm <= 220;
   const angOk     = angle <= 42;
   const tek       = S.tek17; // only show fail/pass strictly when TEK17 is required
@@ -3740,58 +3746,27 @@ function setFlight(f){
 
 function triggerDraw2D(){
   const isMulti = S.type !== 'straight';
+  const d = window._stair2D;
 
-  if(!isMulti || currentFlight === 1){
-    // Use same n as buildStair: TEK17 solver if active, else angle-based
-    let n, shF1;
-    if(S.tek17){
-      let best=null, bestScore=Infinity;
-      for(let ni=3;ni<=60;ni++){
-        const shi=(S.heightCm/100)/ni, oppMm=shi*1000;
-        if(oppMm>220||oppMm<100) continue;
-        const formula=2*oppMm+P.TRINN_W*1000;
-        if(formula<600||formula>640) continue;
-        if(Math.atan2(shi,P.TRINN_W)*180/Math.PI>42) continue;
-        const score=Math.abs(formula-620);
-        if(score<bestScore){bestScore=score;best={n:ni,sh:shi};}
-      }
-      if(best){n=best.n;shF1=best.sh;}
-      else{n=Math.max(3,Math.round((S.heightCm/100)/(P.TRINN_W*Math.tan(S.angleDeg*Math.PI/180))));shF1=(S.heightCm/100)/n;}
-    } else {
-      n=Math.max(3,Math.round((S.heightCm/100)/(P.TRINN_W*Math.tan(S.angleDeg*Math.PI/180))));
-      shF1=(S.heightCm/100)/n;
-    }
-    const half  = Math.floor(n/2);
-    const steps = isMulti ? half : n;
-    draw2D(steps, shF1, P.TRINN_W, Math.round(Math.atan2(shF1,P.TRINN_W)*180/Math.PI), !isMulti,
-           isMulti ? S.heightCm : null);
+  if (!d) {
+    // Fallback: buildStair not yet run, trigger it
+    buildStair(); return;
+  }
 
+  if (!isMulti || currentFlight === 1) {
+    const f = d.f1;
+    draw2D(f.n, f.sh, f.sd, Math.round(Math.atan2(f.sh, f.inntrinn)*180/Math.PI), !isMulti,
+           isMulti ? S.heightCm : null, f.inntrinn);
   } else {
-    // Flight 2 of repos stair
+    const f = d.f2;
+    if (!f) return;
     const heightCm2 = S.f2independent ? S.height2Cm : S.heightCm;
-    const angleDeg2 = S.f2independent ? S.angle2Deg : S.angleDeg;
-    const aR2    = angleDeg2 * Math.PI / 180;
-    const riser2 = P.TRINN_W * Math.tan(aR2);
-    const n2full = Math.max(3, Math.round((heightCm2/100) / riser2));
-    const sh2    = (heightCm2/100) / n2full;
-
-    let steps2;
-    if(S.f2independent){
-      // Independent: F2 has its own full height, same split logic
-      steps2 = n2full - 1; // treadCount with landing
-    } else {
-      // Shared height: F2 gets (n - half) steps, same as 3D
-      const n1     = Math.max(3, Math.round((S.heightCm/100) / (P.TRINN_W * Math.tan(S.angleDeg*Math.PI/180))));
-      const half1  = Math.floor(n1/2);
-      steps2 = n1 - half1; // F2 step count in 3D
-    }
-
-    draw2D(steps2, sh2, P.TRINN_W, Math.round(Math.atan2(sh2, P.TRINN_W)*180/Math.PI), true, heightCm2);
+    draw2D(f.n, f.sh, f.sd, Math.round(Math.atan2(f.sh, f.inntrinn)*180/Math.PI), true, heightCm2, f.inntrinn);
   }
 }
 
 // ─── 2D DRAWING ──────────────────────────────────────────
-function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride){
+function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
   if(isLastFlight===undefined) isLastFlight=true;
   const c2   = document.getElementById('cv2d');
   const wrap = document.getElementById('cv2d-wrap');
@@ -3818,7 +3793,9 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride){
   ctx.fillStyle='rgba(255,255,255,.7)'; ctx.font='10px Barlow,sans-serif'; ctx.textAlign='right';
   ctx.fillText(new Date().toLocaleDateString('no-NO'), W2-14, 18);
 
-  const runMm  = n*sd*1000;
+  // inntrinn = faktisk horisontal ganglinje (kan avvike fra sd ved ikke-flush vinkel)
+  if (inntrinn === undefined) inntrinn = angleDeg > 0 ? sh/Math.tan(angleDeg*Math.PI/180) : sd;
+  const runMm  = n*inntrinn*1000;
   // Use actual height of THIS flight for scaling — sh*n gives real rise
   const riseMm = Math.round(sh*n*1000);
   const landMm = sd*1000*0.8;
@@ -3832,10 +3809,10 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride){
   ctx.beginPath(); ctx.moveTo(ox-15,oy); ctx.lineTo(ox+(runMm+landMm+30)*sc,oy); ctx.stroke();
   ctx.setLineDash([]);
 
-  // Treads & risers
+  // Treads & risers — inntrinn for x-posisjon, sd for tread-bredde (fysisk profil)
   for(let i=0;i<n;i++){
-    const x=ox+i*sd*1000*sc, y=oy-i*sh*1000*sc;
-    const tw=sd*1000*sc, th=sh*1000*sc, trH=P.TRINN_H*1000*sc;
+    const x=ox+i*inntrinn*1000*sc, y=oy-i*sh*1000*sc;
+    const tw=inntrinn*1000*sc, th=sh*1000*sc, trH=P.TRINN_H*1000*sc;
     ctx.fillStyle='#dde4ea'; ctx.strokeStyle='#2d617c'; ctx.lineWidth=1;
     ctx.fillRect(x,y-th,tw,trH); ctx.strokeRect(x,y-th,tw,trH);
     if(S.riser){
@@ -3845,7 +3822,7 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride){
 
   // Landing — only on last flight (repos acts as landing for flight 1)
   if(isLastFlight){
-    const lx=ox+n*sd*1000*sc, ly=oy-n*sh*1000*sc;
+    const lx=ox+runMm*sc, ly=oy-n*sh*1000*sc;
     const lw=landMm*sc, lh=P.TRINN_H*1500*sc;
     ctx.fillStyle='#b8ccd8'; ctx.strokeStyle='#2d617c'; ctx.lineWidth=1.5;
     ctx.fillRect(lx,ly-lh,lw,lh); ctx.strokeRect(lx,ly-lh,lw,lh);
@@ -3855,7 +3832,7 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride){
     ctx.fillText('Landing', lx+5, ly-lh-6);
   } else {
     // Flight 1 ends at repos — show repos symbol
-    const lx=ox+n*sd*1000*sc, ly=oy-n*sh*1000*sc;
+    const lx=ox+runMm*sc, ly=oy-n*sh*1000*sc;
     ctx.fillStyle='rgba(45,97,124,0.15)';
     ctx.fillRect(lx, ly-P.TRINN_H*1000*sc*3, landMm*sc*2, P.TRINN_H*1000*sc*3);
     ctx.strokeStyle='#2d617c'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
@@ -3874,9 +3851,9 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride){
     ctx.fillText(flightLabel+' — Repos '+typeLabel+' | Bytt flight med knappene over', ox+8, top+43);
   }
 
-  // Vang slope line
+  // Vang slope line (bruker inntrinn for horisontal avstand)
   ctx.beginPath(); ctx.strokeStyle='#1a3a4c'; ctx.lineWidth=2.5;
-  ctx.moveTo(ox,oy); ctx.lineTo(ox+n*sd*1000*sc, oy-n*sh*1000*sc); ctx.stroke();
+  ctx.moveTo(ox,oy); ctx.lineTo(ox+runMm*sc, oy-n*sh*1000*sc); ctx.stroke();
 
   // ── DIMENSIONS ──
   const dc='#2d617c';
@@ -3918,12 +3895,12 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride){
 
   // Step callout — bigger font, lower position
   const midI=Math.floor(n/2);
-  const cX=ox+midI*sd*1000*sc, cY=oy-midI*sh*1000*sc;
+  const cX=ox+midI*inntrinn*1000*sc, cY=oy-midI*sh*1000*sc;
   const callY = cY + 40; // below the mid-step, not on top of it
   ctx.fillStyle='rgba(255,255,255,0.85)';
   ctx.fillRect(cX+4, callY-14, 148, 38);
   ctx.fillStyle='#e67e22'; ctx.font='bold 13px Barlow,sans-serif'; ctx.textAlign='left';
-  ctx.fillText('Inntrinn: '+Math.round(sd*1000)+' mm', cX+10, callY+2);
+  ctx.fillText('Inntrinn: '+Math.round(inntrinn*1000)+' mm', cX+10, callY+2);
   ctx.fillText('Opptrinn: '+Math.round(sh*1000)+' mm', cX+10, callY+18);
 
   // Angle arc — placed at bottom left, larger and clearer
@@ -3943,7 +3920,7 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride){
 
   // TEK17 warning overlays
   const oppRound=Math.round(sh*1000);
-  const formula2D = 2*oppRound + Math.round(sd*1000);
+  const formula2D = 2*oppRound + Math.round(inntrinn*1000);
   const formulaOk = formula2D >= 600 && formula2D <= 640;
   if(oppRound>220 || angleDeg>42 || !formulaOk){
     ctx.fillStyle='rgba(192,57,43,0.08)'; ctx.fillRect(0,0,W2,H2);
