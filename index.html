@@ -5481,6 +5481,7 @@ const LIB = (() => {
 
     // Show library overlay
     document.getElementById('lib-overlay').classList.add('lib-open');
+    document.getElementById('cv2d-wrap').style.display = 'none';
     document.body.classList.add('lib-active');
     const _ltb = document.getElementById('lib-toggle-btn');
     if (_ltb) { _ltb.style.display = 'flex'; _ltb.innerHTML = '&#8249;'; _ltb.classList.add('lib-open'); }
