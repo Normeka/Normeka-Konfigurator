@@ -77,7 +77,7 @@ header{background:var(--nblue);padding:.8rem 1.5rem;display:flex;align-items:cen
 .mode-tab.aw{background:var(--ngreen);color:#fff;}
 .mode-tab:hover:not(.as):not(.aw){color:#fff;}
 
-.app{display:grid;grid-template-columns:1fr 360px;height:calc(100vh - 59px);}
+.app{display:grid;grid-template-columns:1fr auto;height:calc(100vh - 59px);}
 .canvas-wrap{position:relative;background:#dde2e8;overflow:hidden;}
 #cv{display:block;width:100%;height:100%;}
 .canvas-hint{position:absolute;top:1rem;right:1rem;font-size:.67rem;color:var(--muted);background:rgba(255,255,255,.85);padding:.28rem .7rem;border-radius:2rem;border:1px solid var(--border);}
@@ -89,7 +89,7 @@ header{background:var(--nblue);padding:.8rem 1.5rem;display:flex;align-items:cen
 .tek-row span:first-child{color:var(--muted);}
 .tok{color:var(--ok);font-weight:600;}.twarn{color:var(--warn);font-weight:600;}.tfail{color:var(--danger);font-weight:600;}
 
-.sidebar{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;}
+.sidebar{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;min-width:0;width:360px;}.sidebar:not(:has(.config-panel.visible)){width:0;overflow:hidden;border-left:none;}
 .config-panel{display:none;flex-direction:column;}
 .config-panel.visible{display:flex;}
 .ss{padding:1rem 1.3rem;border-bottom:1px solid var(--border);}
@@ -99,7 +99,7 @@ header{background:var(--nblue);padding:.8rem 1.5rem;display:flex;align-items:cen
 .cr{margin-bottom:.85rem;}
 .cr:last-child{margin-bottom:0;}
 .cl{display:flex;justify-content:space-between;align-items:center;margin-bottom:.32rem;font-size:.78rem;}
-.cv{font-size:.76rem;font-weight:600;min-width:65px;text-align:right;}
+.cv{font-size:.76rem;font-weight:600;min-width:65px;text-align:right;cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .15s;}.cv:hover{border-bottom-color:currentColor;}
 .cvs{color:var(--nblue);}.cvw{color:var(--ngreen);}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:var(--border);border-radius:2px;outline:none;}
 .sr::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--nblue);border-radius:50%;cursor:grab;transition:transform .15s,box-shadow .15s;}
@@ -301,6 +301,9 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
   transition: opacity .15s;
 }
 #zoom-slider-wrap:hover { opacity: 1; }
+@media(max-width:900px){
+  #zoom-slider-wrap { bottom: 11rem; }
+}
 #zoom-slider-wrap .zoom-icon {
   font-size: .75rem;
   color: var(--text);
@@ -471,11 +474,20 @@ body.dark-mode .vp-ripple { border-color: rgba(241,157,13,.5); }
   inset: 0;
   z-index: 800;
   display: none;
-  pointer-events: none; /* never capture events — sidebar handles its own */
+  pointer-events: none;
 }
 #lib-overlay.lib-open {
   display: block;
-  pointer-events: none; /* keep none — sidebar has its own pointer-events */
+  pointer-events: none;
+}
+/* Når biblioteket er åpent — skyv canvas til høyre */
+body.lib-active .app { 
+  grid-template-columns: 1fr 0px;
+  transition: grid-template-columns .25s ease;
+}
+@media screen and (min-width:901px) {
+  body.lib-active .app { margin-left: 280px; }
+  body.lib-active.lib-sidebar-collapsed .app { margin-left: 0; }
 }
 #lib-sidebar {
   position: fixed;
@@ -1093,6 +1105,8 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
           </div>
           <div style="font-size:.68rem;color:var(--muted);margin-top:.3rem;">Gyldig i 90 dager</div>
         </div>
+        <button onclick="exportGLB()" style="width:100%;margin-top:.5rem;padding:.45rem .7rem;background:#f0f4ff;border:1px solid #4a6fdc;border-radius:8px;font-size:.8rem;color:#4a6fdc;cursor:pointer;font-family:'Barlow',sans-serif;">⬇ Last ned 3D-modell som GLB</button>
+        <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">BIM-kompatibel geometri · Én fil per konfigurasjon</div>
       </div>
       <div class="ss">
         <div class="st sa">Last inn konfigurasjon</div>
@@ -1101,8 +1115,6 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div id="s-excel-wrap" style="display:none;margin-top:.5rem;">
           <button onclick="requireExcelLogin()" style="width:100%;padding:.45rem .7rem;background:#f0f7e8;border:1px solid var(--ngreen);border-radius:8px;font-size:.8rem;color:var(--ngreen);cursor:pointer;font-family:'Barlow',sans-serif;">⬇ Last ned materialliste som Excel (.xlsx)</button>
           <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">Én fane per konfigurasjon — klar for ERP-import</div>
-          <button onclick="exportGLB()" style="width:100%;margin-top:.4rem;padding:.45rem .7rem;background:#f0f4ff;border:1px solid #4a6fdc;border-radius:8px;font-size:.8rem;color:#4a6fdc;cursor:pointer;font-family:'Barlow',sans-serif;">⬇ Last ned 3D-modell som GLB</button>
-          <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">BIM-kompatibel 3D-geometri · Én fil per konfigurasjon</div>
         </div>
       </div>
     </div>
@@ -5492,6 +5504,7 @@ const LIB = (() => {
 
     // Show library overlay
     document.getElementById('lib-overlay').classList.add('lib-open');
+    document.body.classList.add('lib-active');
     const _ltb = document.getElementById('lib-toggle-btn');
     if (_ltb) { _ltb.style.display = 'flex'; _ltb.innerHTML = '&#8249;'; _ltb.classList.add('lib-open'); }
     const _mob = document.getElementById('lib-mob-arrow');
@@ -5516,6 +5529,7 @@ const LIB = (() => {
 
     // Hide overlay
     document.getElementById('lib-overlay').classList.remove('lib-open');
+    document.body.classList.remove('lib-active', 'lib-sidebar-collapsed');
     const _ltb2 = document.getElementById('lib-toggle-btn');
     if (_ltb2) { _ltb2.style.display = 'none'; _ltb2.classList.remove('lib-open'); }
     const _mob2 = document.getElementById('lib-mob-arrow');
@@ -6138,13 +6152,16 @@ const LIB = (() => {
     const btn = document.getElementById('lib-toggle-btn');
     const mob = document.getElementById('lib-mob-arrow');
     const collapsed = sb.classList.toggle('lib-collapsed');
-    // Desktop floating arrow
+    document.body.classList.toggle('lib-sidebar-collapsed', collapsed);
     if (btn) {
       btn.innerHTML = collapsed ? '&#8250;' : '&#8249;';
       btn.classList.toggle('lib-open', !collapsed);
     }
-    // Mobil-pil rotasjon
     if (mob) mob.style.transform = collapsed ? 'rotate(180deg)' : '';
+    setTimeout(() => {
+      if (typeof resize === 'function') resize();
+      if (typeof renderer !== 'undefined') renderer.render(scene, cam);
+    }, 270);
   }
   return { enter, exit, checkPw, checkAdminPw, openLogin, isActive: () => active, unhideAll: _libUnhideAll, toggleCenterPick, toggleCollapse };
 })();
@@ -6477,6 +6494,96 @@ function _downloadBlob(blob, filename) {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// ── CV klikk-for-å-redigere ─────────────────────────────────
+(function() {
+  // Kart: cv-verdi-ID → slider-ID
+  const CV_TO_SLIDER = {
+    'v-h':      's-h',
+    'v-w':      's-w',
+    'v-r':      's-r',
+    'v-h2':     's-h2',
+    'v-r2':     's-r2',
+    'v-rb':     's-rb',
+    'v-rd':     's-rd',
+    'v-f1x':    's-f1x',
+    'v-f2z':    's-f2z',
+    'v-f1x-180':'s-f1x-180',
+    'v-f2x':    's-f2x',
+    'wv-l':     'w-l',
+    'wv-bw':    'w-bw',
+    'wv-h':     'w-h',
+    'wv-s':     'w-s',
+  };
+
+  document.addEventListener('click', function(e) {
+    const cv = e.target.closest('.cv');
+    if (!cv) return;
+    const cvId = cv.id;
+    const sliderId = CV_TO_SLIDER[cvId];
+    if (!sliderId) return;
+    const slider = document.getElementById(sliderId);
+    if (!slider) return;
+
+    // Hent nåværende numerisk verdi fra slider
+    const currentVal = parseFloat(slider.value);
+    const min = parseFloat(slider.min);
+    const max = parseFloat(slider.max);
+    const step = parseFloat(slider.step) || 1;
+
+    // Lag input-felt over cv-elementet
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = currentVal;
+    input.min = min;
+    input.max = max;
+    input.step = step;
+    input.style.cssText = `
+      width: ${Math.max(cv.offsetWidth, 70)}px;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--nblue);
+      background: var(--surface);
+      border: 1.5px solid var(--nblue);
+      border-radius: 4px;
+      padding: 0 4px;
+      text-align: right;
+      font-family: Barlow, sans-serif;
+      outline: none;
+    `;
+
+    let _done = false;
+    function commit() {
+      if (_done) return; _done = true;
+      let v = parseFloat(input.value);
+      if (isNaN(v)) v = currentVal;
+      v = Math.min(max, Math.max(min, v));
+      v = Math.round(v / step) * step;
+      v = parseFloat(v.toFixed(10));
+      cv.style.display = '';
+      if (input.parentNode) input.remove();
+      slider.value = v;
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function cancel() {
+      if (_done) return; _done = true;
+      cv.style.display = '';
+      if (input.parentNode) input.remove();
+    }
+
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { cancel(); }
+    });
+    input.addEventListener('blur', commit);
+
+    cv.style.display = 'none';
+    cv.parentNode.insertBefore(input, cv.nextSibling);
+    input.focus();
+    input.select();
+  });
+})();
 
 function goHome() {
   // Exit library if active
