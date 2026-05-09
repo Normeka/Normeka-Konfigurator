@@ -1241,8 +1241,9 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
           <div class="sc"><div class="sk">Areal</div><div class="sv" id="ws-a">—</div></div>
           <div class="sc"><div class="sk">Søyler</div><div class="sv" id="ws-p">—</div></div>
         </div>
-        <div id="sketch-rail-note" style="display:none;margin-top:.6rem;padding:.5rem .7rem;background:#eaf2f7;border-radius:7px;border:1px solid var(--nblue);font-size:.75rem;color:#2d617c;">
-          ℹ Rekkverk er mulig på egendefinert gangbane. Løsning avklares med Normeka — beskriv gjerne ønsker i kommentarfeltet under.
+        <div id="sketch-rail-note" style="display:none;">
+          <button onclick="W.sketchRailExcluded=new Set();buildWalk();showToast('↺ Rekkverk tilbakestilt');"
+            style="width:100%;padding:.35rem .6rem;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;font-size:.75rem;color:var(--nblue);cursor:pointer;font-family:'Barlow',sans-serif;">↺ Tilbakestill rekkverk</button>
         </div>
       </div>
 
@@ -1402,7 +1403,7 @@ const W = {
   length:6, height:100, span:200,
   bearing:'self', wallmount:false,
   widthCm:120,   // gangbane bredde 40–250cm
-  usage:'industry', grating:'open', mat:'alu-raw',
+  usage:'industry', grating:'open', mat:'alu-raw', sketchRailExcluded: new Set(),
   railType:'topp', whand:true, wtoe:false
 };
 
@@ -2203,23 +2204,9 @@ function buildWalk(){
     mesh.castShadow=true; mesh.receiveShadow=true;
     grp.add(mesh);
 
-    // Grating lines on top surface
-    if(W.grating==='open'){
-      // setFromGeometry not available in r128 — use mesh bounding box after adding to scene
-      geom.computeBoundingBox();
-      const bbox3 = geom.boundingBox;
-      const minX=bbox3.min.x, maxX=bbox3.max.x;
-      const minZ=bbox3.min.z, maxZ=bbox3.max.z;
-      const topY = elev+frameH+0.005;
-      const step = 0.06;
-      for(let z=minZ; z<maxZ; z+=step){
-        const bar = box(maxX-minX, 0.010, 0.016, mkMat(W.mat,true));
-        bar.position.set((minX+maxX)/2, topY, z);
-        grp.add(bar);
-      }
-    }
+    // Grating ikke vist i skisse-modus (fri form — bounding box gir feil geometri)
 
-    // Perimeter border (thin box along each edge for visual definition)
+    // Perimeter border
     const matD2 = mkMat(W.mat,true);
     const allPts=[...pts,pts[0]];
     for(let i=0;i<allPts.length-1;i++){
@@ -2232,6 +2219,61 @@ function buildWalk(){
       edge.position.set(cx,elev+frameH/2,-cz);
       edge.rotation.y=-angle;
       grp.add(edge);
+    }
+
+    // ── Rekkverk langs skisse-kanter ──
+    if(W.rail !== 'none'){
+      const railMat  = mkMat('alu-raw');
+      const railMatD = mkMat('alu-raw', true);
+      const RL   = P.RAIL_H || 1.0;   // rekkverk-høyde
+      const HL_W = P.HL_W   || 0.060; // håndløper-bredde
+      const HL_H = P.HL_H   || 0.040;
+      const ST_S = P.ST_S   || 0.040; // stolpe-tverrsnitt
+      const topY = elev + frameH;
+
+      for(let i=0;i<allPts.length-1;i++){
+        if(W.sketchRailExcluded && W.sketchRailExcluded.has(i)) continue;
+        const a=allPts[i],b=allPts[i+1];
+        const dx=b.x-a.x,dz=b.y-a.y;
+        const segLen=Math.sqrt(dx*dx+dz*dz);
+        if(segLen < 0.05) continue;
+        // Skisse bruker XY-koordinater → world XZ (Z er negert Y fra skisse)
+        // Kant fra (a.x, a.y) til (b.x, b.y) i skisse = (a.x, 0, -a.y) til (b.x, 0, -b.y) i world
+        const wax=a.x, waz=-a.y, wbx=b.x, wbz=-b.y;
+        const wdx=wbx-wax, wdz=wbz-waz;
+        const wcx=(wax+wbx)/2, wcz=(waz+wbz)/2;
+        // Angle i world XZ-planet: rotation.y = atan2(wdx, wdz) for en boks langs Z-aksen
+        const wAngle = Math.atan2(wdx, wdz);
+
+        // Stolper
+        const nSt = Math.max(2, Math.ceil(segLen/1.2)+1);
+        for(let s=0;s<nSt;s++){
+          const t=s/(nSt-1);
+          const px=wax+wdx*t, pz=waz+wdz*t;
+          const st=box(ST_S, RL, ST_S, railMat);
+          st.position.set(px, topY+RL/2, pz);
+          grp.add(st);
+        }
+        // Knelist (mid-rail) — boks langs Z, rotert til kant-retning
+        const kl=box(0.010, 0.050, segLen, railMatD);
+        kl.position.set(wcx, topY+RL*0.5, wcz);
+        kl.rotation.y=wAngle;
+        grp.add(kl);
+        // Håndløper
+        const hl=box(HL_W, HL_H, segLen, railMat);
+        hl.position.set(wcx, topY+RL, wcz);
+        hl.rotation.y=wAngle;
+        grp.add(hl);
+        // Usynlig hitplane
+        // BoxGeometry for pålitelig raycasting fra alle vinkler
+        const hitGeo = new THREE.BoxGeometry(segLen, RL, 0.10);
+        const hitMat = new THREE.MeshBasicMaterial({transparent:true,opacity:0.001,depthWrite:false});
+        const hit = new THREE.Mesh(hitGeo, hitMat);
+        hit.position.set(wcx, topY+RL/2, wcz);
+        hit.rotation.y=wAngle;
+        hit.userData = { type:'sketchRail', sketchRail: true, segIdx: i };
+        grp.add(hit);
+      }
     }
 
     // Compute area via shoelace
@@ -2950,7 +2992,7 @@ document.querySelectorAll('[data-wb]').forEach(b=>b.addEventListener('click',()=
   b.classList.add('tbw'); W.bearing=b.dataset.wb;
   document.getElementById('w-span-row').style.display   = W.bearing==='posts'?'block':'none';
   document.getElementById('w-height-row').style.display = W.bearing==='posts'?'block':'none';
-  updateWalkWarnings(); if(WalkSegs.length>1) buildAllWalkSegs(); else buildWalk();
+  W.sketchRailExcluded = new Set(); updateWalkWarnings(); if(WalkSegs.length>1) buildAllWalkSegs(); else buildWalk();
 }));
 
 function updateWalkWarnings(){
@@ -3972,14 +4014,14 @@ canvas.addEventListener('mouseup', e=>{
 
   // Collect all tagged meshes
   const tagged=[];
-  if(grp) grp.traverse(o=>{ if(o.isMesh&&o.userData.measureType) tagged.push(o); });
+  if(grp) grp.traverse(o=>{ if(o.isMesh&&(o.userData.measureType||o.userData.type)) tagged.push(o); });
   const hits=raycaster.intersectObjects(tagged,false);
 
   const tip=document.getElementById('measure-tip');
   if(hits.length>0){
     const obj=hits[0].object;
     const d=obj.userData.measureData;
-    const t=obj.userData.measureType;
+    const t=obj.userData.measureType || obj.userData.type;
     let title='', body='';
     if(t==='trinn'){
       title='Trappetrinn — Flight '+d.flight+', trinn '+d.stepNum+'/'+d.totalSteps;
@@ -4015,6 +4057,20 @@ canvas.addEventListener('mouseup', e=>{
         S.flightRailExcluded.add(sid);
         tip.style.display='none';
         setTimeout(() => { buildStair(); showToast('✕ Rekkverk fjernet — bruk «Tilbakestill» for å få det tilbake'); }, 200);
+      }
+      return;
+    } else if(t==='sketchRail'){
+      const idx = obj.userData.segIdx;
+      if(!W.sketchRailExcluded) W.sketchRailExcluded = new Set();
+      tip.style.display='none';
+      if(W.sketchRailExcluded.has(idx)){
+        W.sketchRailExcluded.delete(idx);
+        buildWalk();
+        showToast('↩ Rekkverk gjenopprettet');
+      } else {
+        W.sketchRailExcluded.add(idx);
+        buildWalk();
+        showToast('✕ Rekkverk fjernet — klikk igjen for å gjenopprette');
       }
       return;
     }
