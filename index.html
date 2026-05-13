@@ -2286,8 +2286,8 @@ function buildWalk(){
         hl.rotation.y=wAngle;
         grp.add(hl);
         // Usynlig hitplane
-        // Stor, tykk hitbox — enkel å treffe fra alle vinkler
-        const hitGeo = new THREE.BoxGeometry(segLen, RL, 0.40);
+        // Hitbox: smal i dybde, litt kortere enn segmentet for å unngå overlapp i hjørner
+        const hitGeo = new THREE.BoxGeometry(segLen * 0.85, RL, 0.20);
         const hitMat = new THREE.MeshBasicMaterial({transparent:true,opacity:0.001,depthWrite:false,side:THREE.DoubleSide});
         const hit = new THREE.Mesh(hitGeo, hitMat);
         hit.position.set(wcx, topY+RL/2, wcz);
@@ -4081,6 +4081,10 @@ canvas.addEventListener('mouseup', e=>{
       }
       return;
     } else if(t==='sketchRail'){
+      // Bruk nærmeste sketchRail-treff, ikke første i lista
+      const allHits = _raycaster.intersectObjects(tagged, false);
+      const railHit = allHits.find(h => h.object.userData.type==='sketchRail');
+      if (!railHit || railHit.object !== obj) return; // ikke nærmeste
       const idx = obj.userData.segIdx;
       if(!W.sketchRailExcluded) W.sketchRailExcluded = new Set();
       tip.style.display='none';
