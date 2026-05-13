@@ -1260,6 +1260,9 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
           <div class="sc"><div class="sk">Søyler</div><div class="sv" id="ws-p">—</div></div>
         </div>
         <div id="sketch-rail-note" style="display:none;">
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:.4rem;">
+            💡 Klikk på et rekkverkssegment i 3D-visningen for å fjerne det.
+          </div>
           <button onclick="W.sketchRailExcluded=new Set();buildWalk();showToast('↺ Rekkverk tilbakestilt');"
             style="width:100%;padding:.35rem .6rem;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;font-size:.75rem;color:var(--nblue);cursor:pointer;font-family:'Barlow',sans-serif;">↺ Tilbakestill rekkverk</button>
         </div>
@@ -2283,9 +2286,9 @@ function buildWalk(){
         hl.rotation.y=wAngle;
         grp.add(hl);
         // Usynlig hitplane
-        // BoxGeometry for pålitelig raycasting fra alle vinkler
-        const hitGeo = new THREE.BoxGeometry(segLen, RL, 0.10);
-        const hitMat = new THREE.MeshBasicMaterial({transparent:true,opacity:0.001,depthWrite:false});
+        // Stor, tykk hitbox — enkel å treffe fra alle vinkler
+        const hitGeo = new THREE.BoxGeometry(segLen, RL, 0.40);
+        const hitMat = new THREE.MeshBasicMaterial({transparent:true,opacity:0.001,depthWrite:false,side:THREE.DoubleSide});
         const hit = new THREE.Mesh(hitGeo, hitMat);
         hit.position.set(wcx, topY+RL/2, wcz);
         hit.rotation.y=wAngle;
