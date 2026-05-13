@@ -2276,24 +2276,27 @@ function buildWalk(){
         // Angle i world XZ-planet: rotation.y = atan2(wdx, wdz) for en boks langs Z-aksen
         const wAngle = Math.atan2(wdx, wdz);
 
-        // Stolper
+        // Stolper — tagget for klikk
         const nSt = Math.max(2, Math.ceil(segLen/1.2)+1);
         for(let s=0;s<nSt;s++){
           const t=s/(nSt-1);
           const px=wax+wdx*t, pz=waz+wdz*t;
           const st=box(ST_S, RL, ST_S, railMat);
           st.position.set(px, topY+RL/2, pz);
+          st.userData = { type:'sketchRail', sketchRail: true, segIdx: i };
           grp.add(st);
         }
-        // Knelist (mid-rail) — boks langs Z, rotert til kant-retning
+        // Knelist — tagget for klikk
         const kl=box(0.010, 0.050, segLen, railMatD);
         kl.position.set(wcx, topY+RL*0.5, wcz);
         kl.rotation.y=wAngle;
+        kl.userData = { type:'sketchRail', sketchRail: true, segIdx: i };
         grp.add(kl);
-        // Håndløper
+        // Håndløper — tagget for klikk
         const hl=box(HL_W, HL_H, segLen, railMat);
         hl.position.set(wcx, topY+RL, wcz);
         hl.rotation.y=wAngle;
+        hl.userData = { type:'sketchRail', sketchRail: true, segIdx: i };
         grp.add(hl);
         // Usynlig hitplane
         // Hitbox: smal i dybde, litt kortere enn segmentet for å unngå overlapp i hjørner
@@ -4091,10 +4094,6 @@ canvas.addEventListener('mouseup', e=>{
       }
       return;
     } else if(t==='sketchRail'){
-      // Bruk nærmeste sketchRail-treff, ikke første i lista
-      const allHits = _raycaster.intersectObjects(tagged, false);
-      const railHit = allHits.find(h => h.object.userData.type==='sketchRail');
-      if (!railHit || railHit.object !== obj) return; // ikke nærmeste
       const idx = obj.userData.segIdx;
       if(!W.sketchRailExcluded) W.sketchRailExcluded = new Set();
       tip.style.display='none';
