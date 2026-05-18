@@ -5477,7 +5477,7 @@ const LIB = (() => {
     for (const [k,v] of Object.entries(_HARDCODED_LIBRARY)) {
       projects[k] = [...v];
     }
-    if (!_libSynced) { _libSynced = true; syncFromSupabase(); }
+    syncFromSupabase(); // sync hver gang biblioteket åpnes
   }
 
   // ── Login ──────────────────────────────────────────────
