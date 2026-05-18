@@ -580,9 +580,11 @@ body.lib-active .app {
 #lib-close-btn:hover { background: var(--surface2); }
 #lib-body {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  -webkit-overflow-scrolling: touch;
 }
 /* Login modal */
 #lib-login-modal {
