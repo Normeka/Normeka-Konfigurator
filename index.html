@@ -5444,9 +5444,14 @@ const LIB = (() => {
       const res = await fetch(_SB_URL + '/rest/v1/library?select=folder,model_name,url&order=created_at.asc', { headers: _SB_HDRS });
       if (!res.ok) return;
       const rows = await res.json();
+      // Nullstill og bygg på nytt fra Supabase + hardkodede
+      for (const k of Object.keys(projects)) {
+        if (!_HARDCODED_LIBRARY[k]) delete projects[k];
+        else projects[k] = [..._HARDCODED_LIBRARY[k]];
+      }
       for (const row of rows) {
         if (!projects[row.folder]) projects[row.folder] = [];
-        if (row.model_name === '__folder__') continue; // tom mappe placeholder
+        if (row.model_name === '__folder__') continue;
         if (!projects[row.folder].find(m => m.name===row.model_name))
           projects[row.folder].push({ name: row.model_name, url: row.url, embedded: false });
       }
