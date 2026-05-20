@@ -3900,7 +3900,7 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
   // Grunnlinje for dimensjonsmerke bruker fullHeightMm (korrekt flight-høyde)
   const grunnlinjeDimMm = aRadD > 0 ? Math.round(fullHeightMm / Math.tan(aRadD)) : runMm;
   const landMm = sd*1000*0.8;
-  const marg=110, top=50, bot=H2-90;
+  const marg=110, top=50, bot=H2-120;
   const dW=W2-marg-60, dH=bot-top;
   const sc=Math.min(dW/(runMm+landMm+40), dH/(riseMm+20));
   const ox=marg+20, oy=bot;
