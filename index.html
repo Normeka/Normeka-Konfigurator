@@ -2012,7 +2012,7 @@ function buildStair(){
   if(S.type === 'straight'){
     buildFlight(grp, 0, 0, 0, n, sh, 0, n, true, 1, inntrinn);
     storeDims({type:'straight', H:S.heightCm/100, Wm, widthMm:S.widthMm, runLen:n*inntrinn});
-    window._stair2D = { f1:{n, sh, inntrinn, sd:P.TRINN_W} };
+    window._stair2D = { f1:{n, sh, inntrinn, sd:P.TRINN_W, H:S.heightCm/100} };
 
   } else if(S.type === 'r90r' || S.type === 'r90l'){
     const sign       = S.type === 'r90r' ? 1 : -1;
@@ -2061,8 +2061,8 @@ function buildStair(){
     storeDims({type:S.type, H:S.heightCm/100, Wm, VANG_W:P.VANG_W,
                rB, rD, platY, reposZ, f1xOff, f2StartZ,
                f2H:f2H_r90, reposTopY:platY+P.NRM_H});
-    window._stair2D = { f1:{n:half, sh, inntrinn, sd:P.TRINN_W},
-                        f2:{n:f2n_r90-f2half_r90, sh:f2sh_r90, inntrinn:S.f2independent?inntrinn2:inntrinn, sd:P.TRINN_W} };
+    window._stair2D = { f1:{n:half, sh, inntrinn, sd:P.TRINN_W, H:S.heightCm/200},
+                        f2:{n:S.f2independent?f2n_r90-f2half_r90:half, sh:f2sh_r90, inntrinn:S.f2independent?inntrinn2:inntrinn, sd:P.TRINN_W, H:S.f2independent?S.height2Cm/100:S.heightCm/200} };
     // Coordinate system (repos centred at X=0, front at Z=reposZ, back at Z=reposZ-rD):
     //   Flight 1: runs +Z toward repos, arrives at Z=reposZ, centered at X=f1xOff
     //             Gap on front face: X=[f1xOff-Wm/2 .. f1xOff+Wm/2]
@@ -2188,7 +2188,7 @@ function buildStair(){
                reposW, reposDepth, platY, reposZFront, reposX1, f2cx,
                f2H:(S.f2independent?S.height2Cm:S.heightCm)/100,
                reposTopY:platY+P.NRM_H});
-    window._stair2D = { f1:{n:half, sh, inntrinn, sd:P.TRINN_W}, f2:{n:f2steps180, sh:f2riser180, inntrinn:S.f2independent?inntrinn2:inntrinn, sd:P.TRINN_W} };
+    window._stair2D = { f1:{n:half, sh, inntrinn, sd:P.TRINN_W, H:S.heightCm/200}, f2:{n:S.f2independent?f2steps180:half, sh:f2riser180, inntrinn:S.f2independent?inntrinn2:inntrinn, sd:P.TRINN_W, H:S.f2independent?S.height2Cm/100:S.heightCm/200} };
   }
 
   // Center model and aim camera
@@ -2531,7 +2531,25 @@ function updateStairSummary(n, sh, sd, inn, inn2){
   document.getElementById('ss-n').textContent   = (n-1)+' trinn';
   document.getElementById('ss-inn').textContent = innMm+' mm';
   document.getElementById('ss-opp').textContent = oppMm+' mm';
-  document.getElementById('ss-run').textContent = Math.round(n*innF1*100)+' cm';
+  // Løpelengde = hypotenuse via Pytagoras: c = √(høyde² + horisontal_løpe²)
+  // Bruker faktisk høyde og horisontal løpe (ikke trinn-antall)
+  const hyp = (h, b) => Math.round(Math.sqrt(h*h + b*b));
+  const aRad = S.angleDeg * Math.PI / 180;
+  if(S.type === 'straight'){
+    const hF1 = S.heightCm/100; // straight: full høyde
+    const bF1 = hF1 / Math.tan(aRad);
+    document.getElementById('ss-run').textContent = hyp(hF1, bF1)*1000+' mm';
+  } else {
+    const hF1  = S.heightCm / 200; // F1 = halvparten av total
+    const bF1  = hF1 / Math.tan(aRad);
+    const H2   = S.f2independent ? S.height2Cm/100 : S.heightCm/200;
+    const aRad2 = (S.f2independent ? (S.angle2Deg||S.angleDeg) : S.angleDeg) * Math.PI / 180;
+    const bF2  = H2 / Math.tan(aRad2);
+    const f1Hyp = hyp(hF1, bF1) * 1000;
+    const f2Hyp = hyp(H2,  bF2) * 1000;
+    const total = f1Hyp + f2Hyp;
+    document.getElementById('ss-run').textContent = total+' mm (F1: '+f1Hyp+' + F2: '+f2Hyp+')';
+  }
 
   // ── TEK17 Flight 1 ──
   tekCheck(innMm, oppMm, actualAngle, '');
@@ -2545,7 +2563,7 @@ function updateStairSummary(n, sh, sd, inn, inn2){
   if(isRepos){
     // Flight 2 values — use same TEK17 solver as buildStair when active
     let sh2, opp2, ang2;
-    const H2 = S.f2independent ? S.height2Cm/100 : S.heightCm/100;
+    const H2 = S.f2independent ? S.height2Cm/100 : S.heightCm/200; // total/2 per flight
     if(S.tek17){
       let best2=null, bestScore2=Infinity;
       for(let ni=3;ni<=60;ni++){
@@ -2567,7 +2585,7 @@ function updateStairSummary(n, sh, sd, inn, inn2){
     } else {
       const ang2deg = S.f2independent ? Math.max(0.1, S.angle2Deg||35) : Math.max(0.1, S.angleDeg||35);
       const ang2s = S.f2independent ? Math.max(0.1,S.angle2Deg||35) : Math.max(0.1,S.angleDeg||35);
-      const n2 = S.f2independent ? Math.max(3,Math.round(H2/(P.TRINN_W*Math.tan(ang2s*Math.PI/180)))) : Math.max(3,Math.round((S.heightCm/100)/(P.TRINN_W*Math.tan(Math.max(0.1,S.angleDeg||35)*Math.PI/180))));
+      const n2 = S.f2independent ? Math.max(3,Math.round(H2/(P.TRINN_W*Math.tan(ang2s*Math.PI/180)))) : Math.max(3,Math.round(H2/(P.TRINN_W*Math.tan(Math.max(0.1,S.angleDeg||35)*Math.PI/180))));
       sh2  = H2 / n2;
       opp2 = Math.round(sh2*1000);
       ang2 = Math.round(Math.atan2(sh2, P.TRINN_W)*180/Math.PI*10)/10;
@@ -2575,16 +2593,13 @@ function updateStairSummary(n, sh, sd, inn, inn2){
     const inn2Mm = Math.round(innF2*1000); // faktisk inntrinn F2
     tekCheck(inn2Mm, opp2, isNaN(ang2)?0:ang2, '2');
 
-    // Total height: S.heightCm = height to top of repos (vang flush with repos top)
-    // F2 height is measured from repos top upward → total = F1 + F2
-    const totalH = (S.heightCm/100) + H2;
-    const totalCm = Math.round(totalH*100);
+    // Slider = total høyde. F1 = F2 = total/2 (når ikke f2independent)
+    const totalCm = S.f2independent ? Math.round((S.heightCm/100 + H2)*100) : S.heightCm;
+    const f1Cm    = S.f2independent ? S.heightCm : Math.round(S.heightCm/2);
+    const f2Cm    = S.f2independent ? Math.round(H2*100) : Math.round(S.heightCm/2);
     document.getElementById('ss-total').textContent = totalCm+' cm';
     document.getElementById('tk-total-h').textContent = totalCm+' cm';
-    // Breakdown: F1 + F2
-    const f2cm    = Math.round(H2*100);
-    document.getElementById('tk-total-breakdown').textContent =
-      S.heightCm+' + '+f2cm+' cm';
+    document.getElementById('tk-total-breakdown').textContent = f1Cm+' + '+f2Cm+' cm';
     document.getElementById('tk-total-breakdown').style.display = 'block';
   } else {
     // Straight: total = just flight height
@@ -3380,7 +3395,8 @@ function validateBedrift(prefix){
 function getStairCutRows(snapS, snapREPOS){
   const sS = snapS;
   const aR  = (sS.angleDeg||35)*Math.PI/180;
-  const H   = sS.heightCm/100;
+  // Per-flight høyde: rettløp = total, repos = total/2
+  const H   = sS.type==='straight' ? sS.heightCm/100 : sS.heightCm/200;
   const Wm  = sS.widthMm/1000;
   const n   = Math.max(3, Math.round(H/(P.TRINN_W*Math.tan(aR))));
   const sh  = H/n;
@@ -3646,7 +3662,9 @@ async function sendStair(){
   let heightLines = [];
   if(!isRepos){
     // Simple straight stair
-    heightLines = ['Høyde: '+S.heightCm+' cm'];
+    heightLines = S.type==='straight'
+      ? ['Høyde: '+S.heightCm+' cm']
+      : ['Total høyde: '+S.heightCm+' cm', 'Per flight: '+Math.round(S.heightCm/2)+' cm'];
   } else if(S.f2independent){
     // Two different flights — show all three heights explicitly
     const aRad2 = S.angle2Deg*Math.PI/180;
@@ -3670,7 +3688,7 @@ async function sendStair(){
   } else {
     // Repos type but same values both flights
     const half = Math.floor(n/2);
-    const totalH = S.heightCm + S.heightCm;
+    const totalH = S.heightCm; // slider er allerede total
     heightLines = [
       'Høyde Flight 1 (gulv → topp repos): '+S.heightCm+' cm',
       'Høyde Flight 2 (fra repos → topp): '+S.heightCm+' cm',
@@ -3804,6 +3822,8 @@ function setView(v){
   currentView = v;
   document.getElementById('cv').style.display         = v==='3d'?'block':'none';
   document.getElementById('cv2d-wrap').style.display  = v==='2d'?'block':'none';
+  const chint = document.getElementById('canvas-hint');
+  if (chint) chint.style.display = v==='2d' ? 'none' : '';
   document.getElementById('btn-3d').classList.toggle('vt-active', v==='3d');
   document.getElementById('btn-2d').classList.toggle('vt-active', v==='2d');
   // Dim overlay: only visible in 3D when active
@@ -3834,12 +3854,11 @@ function triggerDraw2D(){
   if (!isMulti || currentFlight === 1) {
     const f = d.f1;
     draw2D(f.n, f.sh, f.sd, Math.round(Math.atan2(f.sh, f.inntrinn)*180/Math.PI), !isMulti,
-           isMulti ? S.heightCm : null, f.inntrinn);
+           isMulti ? f.H*100 : null, f.inntrinn);
   } else {
     const f = d.f2;
     if (!f) return;
-    const heightCm2 = S.f2independent ? S.height2Cm : S.heightCm;
-    draw2D(f.n, f.sh, f.sd, Math.round(Math.atan2(f.sh, f.inntrinn)*180/Math.PI), true, heightCm2, f.inntrinn);
+    draw2D(f.n, f.sh, f.sd, Math.round(Math.atan2(f.sh, f.inntrinn)*180/Math.PI), true, f.H*100, f.inntrinn);
   }
 }
 
@@ -3871,13 +3890,17 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
   ctx.fillStyle='rgba(255,255,255,.7)'; ctx.font='10px Barlow,sans-serif'; ctx.textAlign='right';
   ctx.fillText(new Date().toLocaleDateString('no-NO'), W2-14, 18);
 
-  // inntrinn = faktisk horisontal ganglinje (kan avvike fra sd ved ikke-flush vinkel)
+  // inntrinn = faktisk horisontal ganglinje
   if (inntrinn === undefined) inntrinn = angleDeg > 0 ? sh/Math.tan(angleDeg*Math.PI/180) : sd;
-  const runMm  = n*inntrinn*1000;
-  // Use actual height of THIS flight for scaling — sh*n gives real rise
-  const riseMm = Math.round(sh*n*1000);
+  // Grunnlinje: x = h / tan(v)
+  const aRadD  = angleDeg * Math.PI / 180;
+  const fullHeightMm = heightCmOverride ? heightCmOverride*10 : sh*n*1000;
+  const riseMm = Math.round(sh * n * 1000); // faktisk trinn-høyde for tegning og skalering
+  const runMm  = aRadD > 0 ? Math.round(riseMm / Math.tan(aRadD)) : n*inntrinn*1000;
+  // Grunnlinje for dimensjonsmerke bruker fullHeightMm (korrekt flight-høyde)
+  const grunnlinjeDimMm = aRadD > 0 ? Math.round(fullHeightMm / Math.tan(aRadD)) : runMm;
   const landMm = sd*1000*0.8;
-  const marg=90, top=50, bot=H2-70;
+  const marg=110, top=50, bot=H2-90;
   const dW=W2-marg-60, dH=bot-top;
   const sc=Math.min(dW/(runMm+landMm+40), dH/(riseMm+20));
   const ox=marg+20, oy=bot;
@@ -3887,10 +3910,11 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
   ctx.beginPath(); ctx.moveTo(ox-15,oy); ctx.lineTo(ox+(runMm+landMm+30)*sc,oy); ctx.stroke();
   ctx.setLineDash([]);
 
-  // Treads & risers — inntrinn for x-posisjon, sd for tread-bredde (fysisk profil)
+  // Treads & risers — bruk inntrinn for korrekt geometri
+  const treadW = inntrinn * 1000; // horisontal bredde per trinn i mm
   for(let i=0;i<n;i++){
-    const x=ox+i*inntrinn*1000*sc, y=oy-i*sh*1000*sc;
-    const tw=inntrinn*1000*sc, th=sh*1000*sc, trH=P.TRINN_H*1000*sc;
+    const x=ox+i*treadW*sc, y=oy-i*sh*1000*sc;
+    const tw=treadW*sc, th=sh*1000*sc, trH=P.TRINN_H*1000*sc;
     ctx.fillStyle='#dde4ea'; ctx.strokeStyle='#2d617c'; ctx.lineWidth=1;
     ctx.fillRect(x,y-th,tw,trH); ctx.strokeRect(x,y-th,tw,trH);
     if(S.riser){
@@ -3900,7 +3924,7 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
 
   // Landing — only on last flight (repos acts as landing for flight 1)
   if(isLastFlight){
-    const lx=ox+runMm*sc, ly=oy-n*sh*1000*sc;
+    const lx=ox+n*treadW*sc, ly=oy-n*sh*1000*sc;
     const lw=landMm*sc, lh=P.TRINN_H*1500*sc;
     ctx.fillStyle='#b8ccd8'; ctx.strokeStyle='#2d617c'; ctx.lineWidth=1.5;
     ctx.fillRect(lx,ly-lh,lw,lh); ctx.strokeRect(lx,ly-lh,lw,lh);
@@ -3910,7 +3934,7 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
     ctx.fillText('Landing', lx+5, ly-lh-6);
   } else {
     // Flight 1 ends at repos — show repos symbol
-    const lx=ox+runMm*sc, ly=oy-n*sh*1000*sc;
+    const lx=ox+n*treadW*sc, ly=oy-n*sh*1000*sc;
     ctx.fillStyle='rgba(45,97,124,0.15)';
     ctx.fillRect(lx, ly-P.TRINN_H*1000*sc*3, landMm*sc*2, P.TRINN_H*1000*sc*3);
     ctx.strokeStyle='#2d617c'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
@@ -3931,7 +3955,7 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
 
   // Vang slope line (bruker inntrinn for horisontal avstand)
   ctx.beginPath(); ctx.strokeStyle='#1a3a4c'; ctx.lineWidth=2.5;
-  ctx.moveTo(ox,oy); ctx.lineTo(ox+runMm*sc, oy-n*sh*1000*sc); ctx.stroke();
+  ctx.moveTo(ox,oy); ctx.lineTo(ox+n*treadW*sc, oy-n*sh*1000*sc); ctx.stroke();
 
   // ── DIMENSIONS ──
   const dc='#2d617c';
@@ -3950,7 +3974,7 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
   }
   function vDim(x,y1,y2,lbl){
     ctx.save(); ctx.strokeStyle=dc; ctx.fillStyle=dc; ctx.lineWidth=0.8;
-    const dx=x-24;
+    const dx=x-44;
     ctx.beginPath();
     ctx.moveTo(x,y1); ctx.lineTo(dx-6,y1);
     ctx.moveTo(x,y2); ctx.lineTo(dx-6,y2);
@@ -3963,17 +3987,19 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
     ctx.restore();
   }
 
-  hDim(ox, ox+runMm*sc, oy, Math.round(runMm)+' mm');
+  // Grunnlinje og hypotenuse
+  const hypMm = Math.round(Math.sqrt(fullHeightMm*fullHeightMm + grunnlinjeDimMm*grunnlinjeDimMm));
+  hDim(ox, ox+n*treadW*sc, oy+18, grunnlinjeDimMm+' mm');
   // Height label: show which flight and actual cm value
   const actualRiseMm = heightCmOverride ? heightCmOverride*10 : Math.round(riseMm);
   const heightLabel = S.type==='straight'
     ? actualRiseMm+' mm'
     : (currentFlight===1 ? 'F1: '+actualRiseMm+' mm' : 'F2: '+actualRiseMm+' mm');
-  vDim(ox, oy-riseMm*sc, oy, heightLabel);
+  vDim(ox, oy-n*sh*1000*sc, oy, heightLabel);
 
   // Step callout — bigger font, lower position
   const midI=Math.floor(n/2);
-  const cX=ox+midI*inntrinn*1000*sc, cY=oy-midI*sh*1000*sc;
+  const cX=ox+midI*treadW*sc+treadW*sc/2, cY=oy-midI*sh*1000*sc-sh*500*sc;
   const callY = cY + 40; // below the mid-step, not on top of it
   ctx.fillStyle='rgba(255,255,255,0.85)';
   ctx.fillRect(cX+4, callY-14, 148, 38);
@@ -3982,7 +4008,7 @@ function draw2D(n, sh, sd, angleDeg, isLastFlight, heightCmOverride, inntrinn){
   ctx.fillText('Opptrinn: '+Math.round(sh*1000)+' mm', cX+10, callY+18);
 
   // Angle arc — placed at bottom left, larger and clearer
-  const aR2=65;
+  const aR2=50;
   ctx.beginPath(); ctx.strokeStyle='#e67e22'; ctx.lineWidth=2;
   ctx.arc(ox, oy, aR2, -Math.PI/2-(angleDeg*Math.PI/180), -Math.PI/2); ctx.stroke();
   // Tick marks at arc ends
@@ -4737,17 +4763,17 @@ function updateDimOverlay(){
     // F1: floor → repos surface — label uses S.heightCm (same as TEK17 panel)
     const f1bot=p3(f1xOff - sign*(Wm/2+0.08), 0, 0);
     const f1top=p3(f1xOff - sign*(Wm/2+0.08), reposTopY, 0);
-    if(!f1bot.behind&&!f1top.behind) dim(f1bot.x,f1bot.y, f1top.x,f1top.y, 'F1: '+S.heightCm+' cm', ORANGE, -sign*RGT);
+    if(!f1bot.behind&&!f1top.behind) dim(f1bot.x,f1bot.y, f1top.x,f1top.y, 'F1: '+Math.round(S.heightCm/2)+' cm', ORANGE, -sign*RGT);
 
     // F2: repos surface → F2 top
     const f2bot=p3(sign*(rB/2+0.12), reposTopY, f2StartZ);
     const f2top=p3(sign*(rB/2+0.12), f2TopY,    f2StartZ);
-    if(!f2bot.behind&&!f2top.behind) dim(f2bot.x,f2bot.y, f2top.x,f2top.y, 'F2: '+(S.f2independent?S.height2Cm:S.heightCm)+' cm', ORANGE, sign*RGT);
+    if(!f2bot.behind&&!f2top.behind) dim(f2bot.x,f2bot.y, f2top.x,f2top.y, 'F2: '+(S.f2independent?S.height2Cm:Math.round(S.heightCm/2))+' cm', ORANGE, sign*RGT);
 
     // Total: floor → F2 top
     const totBot=p3(f1xOff - sign*(Wm/2+0.22), 0, 0);
     const totTop=p3(f1xOff - sign*(Wm/2+0.22), f2TopY, 0);
-    if(!totBot.behind&&!totTop.behind) dim(totBot.x,totBot.y, totTop.x,totTop.y, 'Tot: '+(S.heightCm+(S.f2independent?S.height2Cm:S.heightCm))+' cm', BLUE, -sign*(RGT+20));
+    if(!totBot.behind&&!totTop.behind) dim(totBot.x,totBot.y, totTop.x,totTop.y, 'Tot: '+(S.f2independent?S.heightCm+S.height2Cm:S.heightCm)+' cm', BLUE, -sign*(RGT+20));
 
     // Gap F1: F1 repos-side vang → repos same-side wall (X)
     // Drawn at repos front face, changes with F1 position slider
@@ -4795,17 +4821,17 @@ function updateDimOverlay(){
     const f1x180Off_d = (REPOS.f1x180Mm||0)/1000;
     const f1bot=p3(f1x180Off_d-Wm/2-VANG_W-0.05, 0, 0);
     const f1top=p3(f1x180Off_d-Wm/2-VANG_W-0.05, reposTopY2, 0);
-    if(!f1bot.behind&&!f1top.behind) dim(f1bot.x,f1bot.y, f1top.x,f1top.y, 'F1: '+S.heightCm+' cm', ORANGE, LFT);
+    if(!f1bot.behind&&!f1top.behind) dim(f1bot.x,f1bot.y, f1top.x,f1top.y, 'F1: '+Math.round(S.heightCm/2)+' cm', ORANGE, LFT);
 
     // F2: repos surface → F2 top (right side)
     const f2bot=p3(reposX2+0.05, reposTopY2, reposZFront-d.reposDepth/2);
     const f2top=p3(reposX2+0.05, f2TopY2,    reposZFront-d.reposDepth/2);
-    if(!f2bot.behind&&!f2top.behind) dim(f2bot.x,f2bot.y, f2top.x,f2top.y, 'F2: '+(S.f2independent?S.height2Cm:S.heightCm)+' cm', ORANGE, RGT);
+    if(!f2bot.behind&&!f2top.behind) dim(f2bot.x,f2bot.y, f2top.x,f2top.y, 'F2: '+(S.f2independent?S.height2Cm:Math.round(S.heightCm/2))+' cm', ORANGE, RGT);
 
     // Total: floor → F2 top (left side, further out)
     const totBot2=p3(-Wm/2-0.20, 0, 0);
     const totTop2=p3(-Wm/2-0.20, f2TopY2, 0);
-    if(!totBot2.behind&&!totTop2.behind) dim(totBot2.x,totBot2.y, totTop2.x,totTop2.y, 'Tot: '+(S.heightCm+(S.f2independent?S.height2Cm:S.heightCm))+' cm', BLUE, LFT-20);
+    if(!totBot2.behind&&!totTop2.behind) dim(totBot2.x,totBot2.y, totTop2.x,totTop2.y, 'Tot: '+(S.f2independent?S.heightCm+S.height2Cm:S.heightCm)+' cm', BLUE, LFT-20);
 
     // Gap F1: from repos left edge to F1 left outer vange
     const f1x180Off_g = (REPOS.f1x180Mm||0)/1000;
