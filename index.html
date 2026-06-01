@@ -3736,13 +3736,25 @@ async function sendStair(){
   }
   const subjCount = _konfigList.length>1 ? ' ('+_konfigList.length+' konfigurasjoner)' : '';
   // Generate multi-ID if multiple configs
-  const displayId = _konfigList.length>1 ? generateMultiConfigId() : configId;
-  if(_konfigList.length>1){
-    // Multi-ID replaces individual ID in body
-    body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayId);
+  if(_konfigList.length > 1){
+    // Lagre multi-konfig til Supabase for kort ID
+    konfigSaveCurrent();
+    const payload = _konfigList.map(k => ({
+      mode: k.mode, label: k.label,
+      snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
+      snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
+    }));
+    const multiState = { _multiMode: true, configs: payload };
+    sbSaveConfig('MLT', multiState).then(shortId => {
+      const displayId = shortId || generateMultiConfigId();
+      body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayId);
+      window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon trapp'+subjCount)+'&body='+encodeURIComponent(body);
+      document.getElementById('s-config-id-display').textContent=displayId;
+    });
+  } else {
+    window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon trapp'+subjCount)+'&body='+encodeURIComponent(body);
+    document.getElementById('s-config-id-display').textContent=configId;
   }
-  window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon trapp'+subjCount)+'&body='+encodeURIComponent(body);
-  document.getElementById('s-config-id-display').textContent=displayId.slice(0,12)+'…';
   document.getElementById('s-config-id-display').dataset.full=displayId;
   document.getElementById('s-config-id-wrap').style.display='block';
   const _isShort = !displayId.includes('eyJ');
@@ -3801,12 +3813,24 @@ async function sendWalk(){
     });
   }
   const subjCountW = _konfigList.length>1 ? ' ('+_konfigList.length+' konfigurasjoner)' : '';
-  const displayIdW = _konfigList.length>1 ? generateMultiConfigId() : configId;
-  if(_konfigList.length>1){
-    body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayIdW);
+  if(_konfigList.length > 1){
+    konfigSaveCurrent();
+    const payloadW = _konfigList.map(k => ({
+      mode: k.mode, label: k.label,
+      snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
+      snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
+    }));
+    const multiStateW = { _multiMode: true, configs: payloadW };
+    sbSaveConfig('MLT', multiStateW).then(shortId => {
+      const displayIdW = shortId || generateMultiConfigId();
+      body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayIdW);
+      window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon gangbane'+subjCountW)+'&body='+encodeURIComponent(body);
+      document.getElementById('w-config-id-display').textContent=displayIdW;
+    });
+  } else {
+    window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon gangbane'+subjCountW)+'&body='+encodeURIComponent(body);
+    document.getElementById('w-config-id-display').textContent=configId;
   }
-  window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon gangbane'+subjCountW)+'&body='+encodeURIComponent(body);
-  document.getElementById('w-config-id-display').textContent=displayIdW.slice(0,12)+'…';
   document.getElementById('w-config-id-display').dataset.full=displayIdW;
   document.getElementById('w-config-id-wrap').style.display='block';
   const _isShortW = !displayIdW.includes('eyJ');
