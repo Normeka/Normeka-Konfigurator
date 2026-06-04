@@ -2708,14 +2708,7 @@ function switchMode(m){
   if(m==='stair') buildStair();
   else if(m==='walk') { buildWalk(); setTimeout(initSketchIfNeeded, 50); }
   // m==='ma': MA._enter() handles scene
-  // Oppdater aktiv konfig sin modus (ikke label — det settes kun ved konfigAdd)
-  if(m !== 'ma') {
-    const _ak = _konfigList && _konfigList.find(k=>k.id===_activeKonfigId);
-    if(_ak && _ak.mode !== m) {
-      _ak.mode = m;
-      if(typeof renderKonfigTabs === 'function') renderKonfigTabs();
-    }
-  }
+
 }
 
 // ─── CONTROLS ────────────────────────────────────────────
