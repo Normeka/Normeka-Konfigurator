@@ -2708,6 +2708,15 @@ function switchMode(m){
   if(m==='stair') buildStair();
   else if(m==='walk') { buildWalk(); setTimeout(initSketchIfNeeded, 50); }
   // m==='ma': MA._enter() handles scene
+  // Oppdater aktiv konfig sin modus og label
+  if(m !== 'ma') {
+    const _ak = _konfigList && _konfigList.find(k=>k.id===_activeKonfigId);
+    if(_ak && _ak.mode !== m) {
+      _ak.mode = m;
+      _ak.label = typeof _makeLabel === 'function' ? _makeLabel(m) : (m==='stair'?'Trapp':'Gangbane');
+      if(typeof renderKonfigTabs === 'function') renderKonfigTabs();
+    }
+  }
 }
 
 // ─── CONTROLS ────────────────────────────────────────────
@@ -5369,9 +5378,21 @@ function konfigRemove(id) {
 }
 
 function konfigPromptAdd() {
-  const choice = confirm('Hva vil du legge til?\n\nOK = Trapp\nAvbryt = Gangbane');
-  const mode = choice ? 'stair' : 'walk';
-  konfigAdd(mode);
+  // Vis en enkel modal i stedet for confirm()
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `<div style="background:var(--surface);border-radius:14px;padding:1.5rem 2rem;min-width:240px;text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.2);">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:var(--nblue);margin-bottom:1rem;">Legg til konfigurasjon</div>
+    <div style="display:flex;gap:.75rem;justify-content:center;">
+      <button onclick="this.closest('div[style]').remove();konfigAdd('stair')"
+        style="padding:.5rem 1.2rem;background:var(--nblue);color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:.9rem;font-weight:600;cursor:pointer;">🪜 Trapp</button>
+      <button onclick="this.closest('div[style]').remove();konfigAdd('walk')"
+        style="padding:.5rem 1.2rem;background:var(--ngreen);color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:.9rem;font-weight:600;cursor:pointer;">🚶 Gangbane</button>
+    </div>
+    <button onclick="this.closest('div[style]').remove()"
+      style="margin-top:.8rem;padding:.3rem .8rem;background:none;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem;cursor:pointer;color:var(--muted);">Avbryt</button>
+  </div>`;
+  document.body.appendChild(modal);
 }
 
 function konfigRename(id){
