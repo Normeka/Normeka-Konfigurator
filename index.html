@@ -6492,23 +6492,46 @@ function _applyDarkScene(isDark) {
 
 
 // ── Deling ──────────────────────────────────────────────────
+function _buildMultiPayload() {
+  // Lagre aktiv konfig først
+  konfigSaveCurrent();
+  const payload = _konfigList.map(k => ({
+    mode: k.mode, label: k.label,
+    snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
+    snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
+  }));
+  // Sjekk om gjeldende modus ikke er representert i listen
+  // Eks: bruker er i gangbane-modus men alle konfigurasjoner er trapper
+  const hasCurrentMode = _konfigList.find(k => k.id === _activeKonfigId);
+  if (hasCurrentMode && currentMode !== hasCurrentMode.mode) {
+    // Aktiv konfig har feil modus — legg til gjeldende som ekstra
+    const extraLabel = currentMode === 'walk' ? 'Gangbane '+ (_konfigList.filter(k=>k.mode==='walk').length+1)
+                                               : 'Trapp '+ (_konfigList.filter(k=>k.mode==='stair').length+1);
+    payload.push({
+      mode: currentMode,
+      label: extraLabel,
+      snapS: snapS(),
+      snapW: snapW(),
+      snapREPOS: snapREPOS()
+    });
+  }
+  return payload;
+}
+
 async function shareConfigStair() {
   try {
     showToast('Genererer ID…');
     let id;
-    if (_konfigList.length > 1) {
-      // Multi-konfig — lagre alle som MLT
-      konfigSaveCurrent();
-      const payload = _konfigList.map(k => ({
-        mode: k.mode, label: k.label,
-        snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
-        snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
-      }));
-      id = await sbSaveConfig('MLT', { _multiMode: true, configs: payload });
+    if (_konfigList.length > 1 || currentMode !== (_konfigList[0]&&_konfigList[0].mode)) {
+      const payload = _buildMultiPayload();
+      if (payload.length > 1) {
+        id = await sbSaveConfig('MLT', { _multiMode: true, configs: payload });
+      } else {
+        const state = {...S, _repos:{...REPOS, reposRailExcluded:[...S.reposRailExcluded]}, _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
+        id = await sbSaveConfig('TRP', state);
+      }
     } else {
-      const state = {...S, _repos:{...REPOS,
-        reposRailExcluded:[...S.reposRailExcluded]},
-        _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
+      const state = {...S, _repos:{...REPOS, reposRailExcluded:[...S.reposRailExcluded]}, _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
       id = await sbSaveConfig('TRP', state);
     }
     document.getElementById('s-share-id').textContent = id;
@@ -6521,14 +6544,13 @@ async function shareConfigWalk() {
   try {
     showToast('Genererer ID…');
     let id;
-    if (_konfigList.length > 1) {
-      konfigSaveCurrent();
-      const payload = _konfigList.map(k => ({
-        mode: k.mode, label: k.label,
-        snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
-        snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
-      }));
-      id = await sbSaveConfig('MLT', { _multiMode: true, configs: payload });
+    if (_konfigList.length > 1 || currentMode !== (_konfigList[0]&&_konfigList[0].mode)) {
+      const payload = _buildMultiPayload();
+      if (payload.length > 1) {
+        id = await sbSaveConfig('MLT', { _multiMode: true, configs: payload });
+      } else {
+        id = await sbSaveConfig('GBN', {...W, _mode:'walk'});
+      }
     } else {
       id = await sbSaveConfig('GBN', {...W, _mode:'walk'});
     }
