@@ -6480,10 +6480,22 @@ function _applyDarkScene(isDark) {
 async function shareConfigStair() {
   try {
     showToast('Genererer ID…');
-    const state = {...S, _repos:{...REPOS,
-      reposRailExcluded:[...S.reposRailExcluded]},
-      _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
-    const id = await sbSaveConfig('TRP', state);
+    let id;
+    if (_konfigList.length > 1) {
+      // Multi-konfig — lagre alle som MLT
+      konfigSaveCurrent();
+      const payload = _konfigList.map(k => ({
+        mode: k.mode, label: k.label,
+        snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
+        snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
+      }));
+      id = await sbSaveConfig('MLT', { _multiMode: true, configs: payload });
+    } else {
+      const state = {...S, _repos:{...REPOS,
+        reposRailExcluded:[...S.reposRailExcluded]},
+        _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
+      id = await sbSaveConfig('TRP', state);
+    }
     document.getElementById('s-share-id').textContent = id;
     document.getElementById('s-share-wrap').style.display = '';
     showToast('🔗 ID klar: ' + id);
@@ -6493,7 +6505,18 @@ async function shareConfigStair() {
 async function shareConfigWalk() {
   try {
     showToast('Genererer ID…');
-    const id = await sbSaveConfig('GBN', {...W, _mode:'walk'});
+    let id;
+    if (_konfigList.length > 1) {
+      konfigSaveCurrent();
+      const payload = _konfigList.map(k => ({
+        mode: k.mode, label: k.label,
+        snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
+        snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
+      }));
+      id = await sbSaveConfig('MLT', { _multiMode: true, configs: payload });
+    } else {
+      id = await sbSaveConfig('GBN', {...W, _mode:'walk'});
+    }
     document.getElementById('w-share-id').textContent = id;
     document.getElementById('w-share-wrap').style.display = '';
     showToast('🔗 ID klar: ' + id);
