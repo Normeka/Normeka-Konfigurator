@@ -5251,7 +5251,17 @@ function syncDOMFromState(mode) {
 function _makeLabel(mode) {
   const stairCount = _konfigList.filter(k=>k.mode==='stair').length + (mode==='stair'?1:0);
   const walkCount  = _konfigList.filter(k=>k.mode==='walk').length  + (mode==='walk' ?1:0);
-  return mode==='stair' ? 'Trapp '+ stairCount : 'Gangbane '+ walkCount;
+  if(mode === 'stair') {
+    const typeMap = {
+      'straight': 'Rettløp',
+      'r90r':     'Repos 90° høyre',
+      'r90l':     'Repos 90° venstre',
+      'r180':     'Repos 180°'
+    };
+    const typeName = typeMap[S.type] || 'Trapp';
+    return typeName + ' ' + stairCount;
+  }
+  return 'Gangbane ' + walkCount;
 }
 
 function konfigSaveCurrent() {
