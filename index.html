@@ -6756,15 +6756,25 @@ function checkGearLogin() {
 // ── Forespørsel-system ──────────────────────────────────────
 
 function leggTilIForesp() {
-  konfigSaveCurrent();
-  const k = _konfigList.find(k => k.id === _activeKonfigId);
-  if(k) {
-    k._iForesp = true;
-    // Vis bekreftelse i riktig panel
-    const cId = currentMode === 'stair' ? 's-added-confirm' : 'w-added-confirm';
-    const confirmEl = document.getElementById(cId);
-    if(confirmEl) { confirmEl.style.display = 'block'; setTimeout(() => confirmEl.style.display = 'none', 2000); }
-  }
+  // Lag en ny kopi av gjeldende konfig og legg den i forespørselen
+  const id = _nextKonfigId++;
+  const mode = currentMode;
+  const label = _makeLabel(mode);
+  const newK = {
+    id, mode, label,
+    snapS: snapS(),
+    snapW: snapW(),
+    snapREPOS: snapREPOS(),
+    _iForesp: true
+  };
+  _konfigList.push(newK);
+  _activeKonfigId = id;
+
+  // Vis bekreftelse
+  const cId = mode === 'stair' ? 's-added-confirm' : 'w-added-confirm';
+  const confirmEl = document.getElementById(cId);
+  if(confirmEl) { confirmEl.style.display = 'block'; setTimeout(() => confirmEl.style.display = 'none', 2000); }
+
   oppdaterForespBadge();
   renderForespListe();
 }
