@@ -461,6 +461,7 @@ body.dark-mode .vp-ripple { border-color: rgba(241,157,13,.5); }
 .info-body ul li{margin-bottom:.25rem;color:#3a3a36;}
 .info-tag-cloud{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.5rem;}
 .info-tag{background:var(--surface2);border:1px solid var(--border);border-radius:1rem;padding:.18rem .65rem;font-size:.72rem;color:var(--muted);font-weight:500;}
+#konfig-tab-bar { display:none !important; }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -801,6 +802,13 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
     <button class="mode-tab"   id="tab-w" onclick="switchMode('walk')"> Gangbanekonfigurator</button>
   </div>
   <button id="dark-toggle" onclick="toggleDarkMode()" title="Bytt lys/mørk modus">🌙 Mørk</button>
+  <button id="foresp-header-btn" onclick="toggleForespDropdown()"
+    style="position:relative;padding:.3rem .75rem;border-radius:20px;border:1.5px solid var(--nblue);
+           background:var(--surface);color:var(--nblue);font-family:'Barlow',sans-serif;
+           font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s;">
+    📋 Forespørsel <span id="foresp-count-badge" style="display:none;background:var(--nblue);color:#fff;
+      border-radius:10px;padding:0 6px;font-size:.7rem;margin-left:3px;">0</span>
+  </button>
 <div id="gear-modal" style="position:fixed;inset:0;z-index:1002;background:rgba(0,0,0,.55);
      display:none;align-items:center;justify-content:center;">
   <div class="lib-modal-box" style="min-width:260px;">
@@ -1089,38 +1097,8 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       </div>
 
       <div class="ss">
-        <div class="st sa">Send forespørsel</div>
-        <div class="ff"><label>Prosjektnavn / byggnummer</label><input type="text" id="sf-project" placeholder="Bygg A, inngang nord / P-2024-001"></div>
-        <div class="ff"><label>Navn</label><input type="text" id="sf-name" placeholder="Ola Nordmann"></div>
-        <div class="ff">
-          <label>Firma <span style="color:#c0392b;">*</span></label>
-          <input type="text" id="sf-co" placeholder="Søk på firmanavn..." autocomplete="off" oninput="brregSearch(this.value,'sf')">
-          <div id="sf-brreg-results" style="display:none;border:1px solid var(--border2);border-radius:6px;background:#fff;margin-top:3px;max-height:180px;overflow-y:auto;font-size:.78rem;"></div>
-          <input type="hidden" id="sf-orgnr">
-          <div id="sf-brreg-confirmed" style="display:none;margin-top:4px;font-size:.72rem;color:#3a7a3a;font-weight:600;"></div>
-          <div id="sf-brreg-error" style="display:none;margin-top:4px;font-size:.72rem;color:#c0392b;"></div>
-          <div style="margin-top:3px;font-size:.68rem;color:var(--muted);">Kun norske bedrifter. <span style="cursor:pointer;text-decoration:underline;" onclick="toggleForeign('sf')">Utenlandsk bedrift?</span></div>
-          <div id="sf-foreign" style="display:none;margin-top:4px;">
-            <label style="display:flex;align-items:center;gap:6px;font-size:.75rem;cursor:pointer;">
-              <input type="checkbox" id="sf-foreign-cb" onchange="toggleForeignCb('sf')"> Utenlandsk bedrift — jeg bekrefter at dette er en næringsforespørsel
-            </label>
-          </div>
-        </div>
-        <div class="ff"><label>E-post</label><input type="email" id="sf-email" placeholder="ola@firma.no"></div>
-        <div class="ff"><label>Telefon</label><input type="tel" id="sf-ph" placeholder="+47 000 00 000"></div>
-        <div class="ff"><label>Kommentar</label><textarea id="sf-msg" rows="3" placeholder="Monteringssted, krav..."></textarea></div>
-        <div style="padding:.55rem .7rem;background:#f4f8fb;border:1px solid var(--nblue);border-radius:7px;font-size:.73rem;color:var(--nblue);line-height:1.6;margin-bottom:.6rem;">
-          <strong>ℹ Merk:</strong> 3D-visualiseringen er veiledende og kan avvike fra endelig løsning. Normeka sine teknikere vil gjennomgå konfigurasjonen og tilpasse der det er nødvendig. Du kontaktes ved eventuelle avklaringsbehov.
-        </div>
-        <button class="obtn obs" onclick="sendStair()">Send forespørsel →</button>
-        <div id="s-config-id-wrap" style="display:none;margin-top:.7rem;padding:.6rem .8rem;background:#eaf2f7;border-radius:7px;border:1px solid var(--nblue);">
-          <div style="font-size:.65rem;font-weight:700;color:var(--nblue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem;">Konfigurasjon-ID generert</div>
-          <div style="display:flex;align-items:center;gap:.5rem;">
-            <div style="font-family:monospace;font-size:.85rem;font-weight:700;color:var(--nblue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" id="s-config-id-display">—</div>
-            <button onclick="copyConfigId('s')" style="flex-shrink:0;padding:.2rem .6rem;background:var(--nblue);color:#fff;border:none;border-radius:5px;font-size:.72rem;cursor:pointer;">Kopier</button>
-          </div>
-          <div style="font-size:.68rem;color:var(--muted);margin-top:.25rem;">Del ID-en med kollega — de limer den inn her for å hente konfigurasjonen (gyldig i 90 dager).</div>
-        </div>
+        <button id="s-add-to-req-btn" class="obtn obs" onclick="leggTilIForesp()">+ Legg til i forespørsel</button>
+        <div id="s-added-confirm" style="display:none;font-size:.75rem;color:#3a7d44;margin-top:.4rem;font-weight:600;">✓ Lagt til i forespørsel</div>
       </div>
 
       <div class="ss">
@@ -1281,38 +1259,8 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
       </div>
 
       <div class="ss">
-        <div class="st wa">Send forespørsel</div>
-        <div class="ff"><label>Prosjektnavn / byggnummer</label><input type="text" id="wf-project" placeholder="Bygg A, inngang nord / P-2024-001"></div>
-        <div class="ff"><label>Navn</label><input type="text" id="wf-name" placeholder="Ola Nordmann"></div>
-        <div class="ff">
-          <label>Firma <span style="color:#c0392b;">*</span></label>
-          <input type="text" id="wf-co" placeholder="Søk på firmanavn..." autocomplete="off" oninput="brregSearch(this.value,'wf')">
-          <div id="wf-brreg-results" style="display:none;border:1px solid var(--border2);border-radius:6px;background:#fff;margin-top:3px;max-height:180px;overflow-y:auto;font-size:.78rem;"></div>
-          <input type="hidden" id="wf-orgnr">
-          <div id="wf-brreg-confirmed" style="display:none;margin-top:4px;font-size:.72rem;color:#3a7a3a;font-weight:600;"></div>
-          <div id="wf-brreg-error" style="display:none;margin-top:4px;font-size:.72rem;color:#c0392b;"></div>
-          <div style="margin-top:3px;font-size:.68rem;color:var(--muted);">Kun norske bedrifter. <span style="cursor:pointer;text-decoration:underline;" onclick="toggleForeign('wf')">Utenlandsk bedrift?</span></div>
-          <div id="wf-foreign" style="display:none;margin-top:4px;">
-            <label style="display:flex;align-items:center;gap:6px;font-size:.75rem;cursor:pointer;">
-              <input type="checkbox" id="wf-foreign-cb" onchange="toggleForeignCb('wf')"> Utenlandsk bedrift — jeg bekrefter at dette er en næringsforespørsel
-            </label>
-          </div>
-        </div>
-        <div class="ff"><label>E-post</label><input type="email" id="wf-email" placeholder="ola@firma.no"></div>
-        <div class="ff"><label>Telefon</label><input type="tel" id="wf-ph" placeholder="+47 000 00 000"></div>
-        <div class="ff"><label>Kommentar</label><textarea id="wf-msg" rows="3" placeholder="Montering, krav..."></textarea></div>
-        <div style="padding:.55rem .7rem;background:#f0f7ee;border:1px solid var(--ngreen);border-radius:7px;font-size:.73rem;color:#3a6020;line-height:1.6;margin-bottom:.6rem;">
-          <strong>ℹ Merk:</strong> 3D-visualiseringen er veiledende og kan avvike fra endelig løsning. Normeka sine teknikere vil gjennomgå konfigurasjonen og tilpasse der det er nødvendig. Du kontaktes ved eventuelle avklaringsbehov.
-        </div>
-        <button class="obtn obw" onclick="sendWalk()">Send forespørsel →</button>
-        <div id="w-config-id-wrap" style="display:none;margin-top:.7rem;padding:.6rem .8rem;background:#eef3e8;border-radius:7px;border:1px solid var(--ngreen);">
-          <div style="font-size:.65rem;font-weight:700;color:var(--ngreen);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem;">Konfigurasjon-ID generert</div>
-          <div style="display:flex;align-items:center;gap:.5rem;">
-            <div style="font-family:monospace;font-size:.85rem;font-weight:700;color:var(--ngreen);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" id="w-config-id-display">—</div>
-            <button onclick="copyConfigId('w')" style="flex-shrink:0;padding:.2rem .6rem;background:var(--ngreen);color:#fff;border:none;border-radius:5px;font-size:.72rem;cursor:pointer;">Kopier</button>
-          </div>
-          <div style="font-size:.68rem;color:var(--muted);margin-top:.25rem;">Del ID-en med kollega — de limer den inn her for å hente konfigurasjonen (gyldig i 90 dager).</div>
-        </div>
+        <button id="w-add-to-req-btn" class="obtn obw" onclick="leggTilIForesp()">+ Legg til i forespørsel</button>
+        <div id="w-added-confirm" style="display:none;font-size:.75rem;color:#3a7d44;margin-top:.4rem;font-weight:600;">✓ Lagt til i forespørsel</div>
       </div>
 
       <div class="ss">
@@ -6805,6 +6753,193 @@ function checkGearLogin() {
   });
 }
 
+// ── Forespørsel-system ──────────────────────────────────────
+
+function leggTilIForesp() {
+  konfigSaveCurrent();
+  const k = _konfigList.find(k => k.id === _activeKonfigId);
+  if(k) {
+    k._iForesp = true;
+    // Vis bekreftelse i riktig panel
+    const cId = currentMode === 'stair' ? 's-added-confirm' : 'w-added-confirm';
+    const confirmEl = document.getElementById(cId);
+    if(confirmEl) { confirmEl.style.display = 'block'; setTimeout(() => confirmEl.style.display = 'none', 2000); }
+  }
+  oppdaterForespBadge();
+  renderForespListe();
+}
+
+function oppdaterForespBadge() {
+  const items = _konfigList.filter(k => k._iForesp);
+  const badge = document.getElementById('foresp-count-badge');
+  const btn   = document.getElementById('foresp-header-btn');
+  if(badge) {
+    badge.textContent = items.length;
+    badge.style.display = items.length > 0 ? 'inline' : 'none';
+  }
+  if(btn) btn.style.borderColor = items.length > 0 ? 'var(--nblue)' : '';
+  const sendBtn = document.getElementById('foresp-send-btn');
+  if(sendBtn) {
+    sendBtn.disabled = items.length === 0;
+    sendBtn.style.opacity = items.length > 0 ? '1' : '.4';
+  }
+}
+
+function renderForespListe() {
+  const list  = document.getElementById('foresp-list');
+  const empty = document.getElementById('foresp-empty');
+  if(!list) return;
+  const items = _konfigList.filter(k => k._iForesp);
+  if(items.length === 0) {
+    if(empty) empty.style.display = 'block';
+    // Remove all item rows
+    list.querySelectorAll('.foresp-item').forEach(el => el.remove());
+    return;
+  }
+  if(empty) empty.style.display = 'none';
+  // Rebuild list
+  list.querySelectorAll('.foresp-item').forEach(el => el.remove());
+  items.forEach(k => {
+    const icon = k.mode === 'stair' ? '🪜' : '🚶';
+    const row  = document.createElement('div');
+    row.className = 'foresp-item';
+    row.style.cssText = 'display:flex;align-items:center;gap:.5rem;padding:.5rem .25rem;border-bottom:1px solid var(--border2);';
+    row.innerHTML = `
+      <span style="font-size:1.1rem;">${icon}</span>
+      <input value="${k.label}" style="flex:1;border:none;background:transparent;font-family:inherit;
+             font-size:.85rem;color:var(--text);outline:none;cursor:pointer;"
+             onfocus="this.style.background='var(--surface2)';this.style.borderRadius='5px';this.style.padding='2px 5px';"
+             onblur="this.style.background='transparent';this.style.padding='0';_forespRename(${k.id},this.value);"
+             onkeydown="if(event.key==='Enter')this.blur();">
+      <button onclick="_forespSwitch(${k.id})"
+        style="padding:.2rem .5rem;background:none;border:1px solid var(--border);border-radius:5px;
+               font-size:.7rem;cursor:pointer;color:var(--muted);">Vis</button>
+      <button onclick="_forespRemove(${k.id})"
+        style="padding:.2rem .45rem;background:none;border:1px solid #e0b0b0;border-radius:5px;
+               font-size:.75rem;cursor:pointer;color:#c0392b;">✕</button>`;
+    list.appendChild(row);
+  });
+}
+
+function _forespRename(id, newLabel) {
+  const k = _konfigList.find(k => k.id === id);
+  if(k && newLabel.trim()) k.label = newLabel.trim();
+  renderKonfigTabs();
+}
+
+function _forespSwitch(id) {
+  const k = _konfigList.find(k => k.id === id);
+  if(!k) return;
+  toggleForespDropdown();
+  konfigSwitch(id);
+}
+
+function _forespRemove(id) {
+  const k = _konfigList.find(k => k.id === id);
+  if(k) k._iForesp = false;
+  oppdaterForespBadge();
+  renderForespListe();
+}
+
+function toggleForespDropdown() {
+  const dd = document.getElementById('foresp-dropdown');
+  if(!dd) return;
+  const vis = dd.style.display === 'none' || !dd.style.display;
+  dd.style.display = vis ? 'block' : 'none';
+  if(vis) renderForespListe();
+}
+
+// Lukk dropdown ved klikk utenfor
+document.addEventListener('click', e => {
+  const dd  = document.getElementById('foresp-dropdown');
+  const btn = document.getElementById('foresp-header-btn');
+  if(dd && dd.style.display === 'block' && !dd.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+    dd.style.display = 'none';
+  }
+});
+
+function apneSendModal() {
+  document.getElementById('send-modal').style.display = 'flex';
+}
+
+function lukkSendModal() {
+  document.getElementById('send-modal').style.display = 'none';
+}
+
+async function sendForesp() {
+  const name    = document.getElementById('modal-name').value.trim();
+  const email   = document.getElementById('modal-email').value.trim();
+  const project = document.getElementById('modal-project').value.trim();
+  const co      = document.getElementById('modal-co').value.trim();
+  const ph      = document.getElementById('modal-ph').value.trim();
+  const msg     = document.getElementById('modal-msg').value.trim();
+
+  if(!email) { showToast('⚠ E-post er påkrevd'); return; }
+
+  const items = _konfigList.filter(k => k._iForesp);
+  if(items.length === 0) { showToast('⚠ Ingen konfigurasjoner lagt til'); return; }
+
+  // Lagre alle til Supabase for kort ID
+  let shareId;
+  try {
+    if(items.length === 1) {
+      const k = items[0];
+      const prefix = k.mode === 'stair' ? 'TRP' : 'GBN';
+      const state  = k.mode === 'stair'
+        ? {...k.snapS, _repos:{...k.snapREPOS}, _mode:'stair'}
+        : {...k.snapW, _mode:'walk'};
+      shareId = await sbSaveConfig(prefix, state);
+    } else {
+      const payload = items.map(k => ({
+        mode: k.mode, label: k.label,
+        snapS: k.snapS, snapW: k.snapW, snapREPOS: k.snapREPOS
+      }));
+      shareId = await sbSaveConfig('MLT', { _multiMode: true, configs: payload });
+    }
+  } catch(e) { shareId = null; }
+
+  // Bygg mail-body
+  let body = '';
+  if(project) body += 'Prosjekt: '+project+'\n';
+  if(name)    body += 'Navn: '+name+'\n';
+  if(co)      body += 'Firma: '+co+'\n';
+  if(email)   body += 'E-post: '+email+'\n';
+  if(ph)      body += 'Telefon: '+ph+'\n';
+  body += '\n';
+
+  items.forEach((k, idx) => {
+    body += '── Konfigurasjon '+(idx+1)+': '+k.label+' ──\n';
+    if(k.mode === 'stair') {
+      const sn = k.snapS;
+      body += 'Type: '+(sn.type||'straight')+'\n';
+      body += 'Høyde: '+sn.heightCm+' cm\n';
+      body += 'Bredde: '+sn.widthMm+' mm\n';
+      body += 'Vinkel: '+(sn.angleDeg||35)+'°\n';
+      body += 'Rekkverk: '+(sn.rail||'spiler')+'\n';
+      body += 'Overflate: '+(sn.mat||'alu-raw')+'\n';
+    } else {
+      const wn = k.snapW;
+      body += 'Lengde: '+wn.length+' m\n';
+      body += 'Bredde: '+wn.widthMm+' mm\n';
+      body += 'Bæring: '+(wn.bearing||'self')+'\n';
+      body += 'Rekkverk: '+(wn.rail||'none')+'\n';
+      body += 'Overflate: '+(wn.mat||'alu-raw')+'\n';
+    }
+    body += '\n';
+  });
+
+  if(shareId) body += 'Konfigurasjon-ID: '+shareId+'\n';
+  if(msg)     body += '\nKommentar:\n'+msg+'\n';
+
+  const count = items.length > 1 ? ' ('+items.length+' konfigurasjoner)' : '';
+  window.location.href = 'mailto:anders.thoresen@normeka.no'
+    + '?subject='+encodeURIComponent('Normeka — Konfigurasjon'+count)
+    + '&body='+encodeURIComponent(body);
+
+  lukkSendModal();
+  toggleForespDropdown();
+}
+
 function goHome() {
   // Exit library if active
   if (typeof LIB !== 'undefined' && LIB.isActive()) LIB.exit();
@@ -7322,5 +7457,77 @@ var MA = (() => {
          transition:opacity .2s;line-height:1;"
   onmouseenter="this.style.opacity='1'"
   onmouseleave="this.style.opacity='.3'">⚙️</button>
+
+<!-- ── Forespørsel Dropdown ───────────────────────────── -->
+<div id="foresp-dropdown" style="display:none;position:fixed;top:52px;right:1rem;z-index:900;
+     width:320px;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+     box-shadow:0 8px 32px rgba(0,0,0,.18);overflow:hidden;">
+  <div style="padding:.8rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;color:var(--nblue);">📋 Forespørsel</span>
+    <button onclick="toggleForespDropdown()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--muted);">✕</button>
+  </div>
+  <div id="foresp-list" style="max-height:320px;overflow-y:auto;padding:.5rem .75rem;">
+    <div id="foresp-empty" style="text-align:center;padding:1.5rem;color:var(--muted);font-size:.82rem;">
+      Ingen konfigurasjoner lagt til ennå.<br>Bruk «+ Legg til i forespørsel» i panelet.
+    </div>
+  </div>
+  <div style="padding:.75rem 1rem;border-top:1px solid var(--border);">
+    <button id="foresp-send-btn" onclick="apneSendModal()"
+      style="width:100%;padding:.55rem;background:var(--nblue);color:#fff;border:none;border-radius:8px;
+             font-family:'Barlow',sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;opacity:.4;"
+      disabled>Send forespørsel →</button>
+  </div>
+</div>
+
+<!-- ── Send Modal ─────────────────────────────────────── -->
+<div id="send-modal" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.55);
+     align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:14px;padding:1.8rem 2rem;width:min(480px,95vw);
+       max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25);">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;
+         color:var(--nblue);margin-bottom:1.2rem;">Send forespørsel til Normeka</div>
+
+    <div class="ff"><label>Prosjektnavn / byggnummer</label>
+      <input type="text" id="modal-project" placeholder="Bygg A, inngang nord / P-2024-001"></div>
+    <div class="ff"><label>Navn</label>
+      <input type="text" id="modal-name" placeholder="Ola Nordmann"></div>
+    <div class="ff">
+      <label>Firma <span style="color:#c0392b;">*</span></label>
+      <input type="text" id="modal-co" placeholder="Søk på firmanavn..." autocomplete="off"
+        oninput="brregSearch(this.value,'modal')" onfocus="brregSearch(this.value,'modal')">
+      <div id="modal-brreg-results" style="display:none;border:1px solid var(--border2);border-radius:7px;
+           background:var(--surface);max-height:160px;overflow-y:auto;margin-top:3px;font-size:.8rem;z-index:100;position:relative;"></div>
+      <input type="hidden" id="modal-orgnr">
+      <div id="modal-brreg-confirmed" style="display:none;margin-top:4px;font-size:.72rem;color:#3a7d44;font-weight:600;"></div>
+      <div id="modal-brreg-error" style="display:none;margin-top:4px;font-size:.72rem;color:#c0392b;"></div>
+      <div style="margin-top:3px;font-size:.68rem;color:var(--muted);">Kun norske bedrifter.
+        <span style="color:var(--nblue);cursor:pointer;text-decoration:underline;"
+          onclick="document.getElementById('modal-foreign').style.display=document.getElementById('modal-foreign').style.display==='none'?'block':'none'">Utenlandsk firma?</span></div>
+      <div id="modal-foreign" style="display:none;margin-top:4px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:.75rem;cursor:pointer;">
+          <input type="checkbox" id="modal-foreign-cb" onchange="toggleForeignCb('modal')"> Utenlandsk firma (skriv inn navn manuelt)
+        </label>
+      </div>
+    </div>
+    <div class="ff"><label>E-post</label>
+      <input type="email" id="modal-email" placeholder="ola@firma.no"></div>
+    <div class="ff"><label>Telefon</label>
+      <input type="tel" id="modal-ph" placeholder="+47 000 00 000"></div>
+    <div class="ff"><label>Kommentar</label>
+      <textarea id="modal-msg" rows="3" placeholder="Monteringshjelp ønskes, spesiell tilpasning, etc."></textarea></div>
+
+    <div style="padding:.55rem .7rem;background:#f4f8fb;border:1px solid var(--nblue);border-radius:7px;
+         font-size:.72rem;color:#2d617c;margin-bottom:.8rem;">
+      <strong>ℹ Merk:</strong> 3D-visualiseringen er veiledende og kan avvike fra endelig løsning. En Normeka-tekniker tar kontakt for gjennomgang.
+    </div>
+    <div style="display:flex;gap:.6rem;">
+      <button onclick="lukkSendModal()" style="flex:1;padding:.5rem;background:none;border:1px solid var(--border);
+              border-radius:8px;font-family:inherit;font-size:.85rem;cursor:pointer;color:var(--muted);">Avbryt</button>
+      <button onclick="sendForesp()" style="flex:2;padding:.5rem;background:var(--nblue);color:#fff;border:none;
+              border-radius:8px;font-family:'Barlow',sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;">Send forespørsel →</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
