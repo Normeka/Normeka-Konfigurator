@@ -952,7 +952,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div class="st sa">Dimensjoner</div>
         <div class="cr">
           <div class="cl"><span id="lbl-h">Høyde</span><span class="cv cvs" id="v-h">240 cm</span></div>
-          <input type="range" class="sr" id="s-h" min="150" max="600" value="240" step="5">
+          <input type="range" class="sr" id="s-h" min="50" max="600" value="240" step="5">
         </div>
         <div class="cr">
           <div class="cl"><span>Trappens bredde</span><span class="cv cvs" id="v-w">900 mm</span></div>
@@ -1572,47 +1572,60 @@ function buildStair(){
   let inntrinn  = P.TRINN_W; // horisontal ganglinje F1 (nese til nese), varierer med vinkel
   let inntrinn2 = P.TRINN_W; // horisontal ganglinje F2
 
+  // Vinkel er alltid styrende — n beregnes fra vinkel
+  const aRad_n = Math.max(0.01, Math.min(80, S.angleDeg || 35)) * Math.PI / 180;
+  sd = P.TRINN_W;
+  n  = Math.max(3, Math.round(H / (sd * Math.tan(aRad_n))));
+  sh = H / n;
+  if(!isFinite(sh) || isNaN(sh)) sh = 0.185;
+  inntrinn = sh / Math.tan(aRad_n);
+  if(!isFinite(inntrinn) || isNaN(inntrinn)) inntrinn = sd;
+
   if(S.tek17){
-    // Solve n: iterate to find n where TEK17 formula is satisfied
-    let best=null, bestScore=Infinity;
-    for(let ni=3; ni<=60; ni++){
-      const shi=H/ni;
-      const oppMm=shi*1000;
-      if(oppMm>220||oppMm<100) continue;
-      const formula=2*oppMm+sd*1000;
-      if(formula<600||formula>640) continue;
-      const ang=Math.atan2(shi,sd)*180/Math.PI;
-      if(ang>42||ang<20) continue;
-      const score=Math.abs(formula-620); // prefer formula closest to 620mm
-      if(score<bestScore){bestScore=score;best={n:ni,sh:shi,angle:Math.round(ang*10)/10};}
+    // TEK17: finn n og vinkel der inntrinn er nærmest 250mm og formelen er innenfor [600-640]
+    // Vinkel er styrende — velg n og vinkel som gir inntrinn ≈ 250mm
+    const baseAngleDeg = S.angleDeg || 35;
+    let best = null, bestScore = Infinity;
+    for(let ni = 3; ni <= 60; ni++){
+      const shi   = H / ni;
+      const oppMm = shi * 1000;
+      if(oppMm > 220 || oppMm < 80) continue;
+      // Finn vinkelen som gir inntrinn = 250mm eksakt
+      const innTarget = P.TRINN_W; // 0.2495m
+      const formula = 2*oppMm + innTarget*1000;
+      if(formula < 600 || formula > 640) continue;
+      const ang = Math.atan2(shi, innTarget) * 180 / Math.PI;
+      if(ang > 45 || ang < 15) continue;
+      // Velg løsning med færrest trinn (høyest vinkel) — korteste og billigste trapp
+      if(ni < (best ? best.n : 999)){
+        best = { n: ni, sh: shi, angle: Math.round(ang*10)/10, inn: innTarget };
+      }
     }
     if(best){
-      n=best.n; sh=best.sh;
-      if(best.angle!==S.angleDeg){
-        S.angleDeg=best.angle;
-        const sl=document.getElementById('s-r');
-        if(sl){sl.value=best.angle;document.getElementById('v-r').textContent=best.angle.toFixed(1)+'°';}
+      n = best.n; sh = best.sh; inntrinn = best.inn;
+      if(Math.abs(best.angle - S.angleDeg) > 0.05){
+        S.angleDeg = best.angle;
+        const sl = document.getElementById('s-r');
+        if(sl){ sl.value = best.angle; }
+        const vR = document.getElementById('v-r');
+        if(vR) vR.textContent = best.angle.toFixed(1)+'°';
       }
     } else {
-      // Fallback: use current angle
-      n=Math.max(3,Math.round(H/(sd*Math.tan(S.angleDeg*Math.PI/180))));
-      sh=H/n;
+      // Ingen TEK17-løsning — sett flush vinkel (inntrinn = TRINN_W) som best mulig
+      const flushAng = Math.round(Math.atan2(sh, P.TRINN_W) * 180 / Math.PI * 10) / 10;
+      inntrinn = P.TRINN_W;
+      if(Math.abs(flushAng - S.angleDeg) > 0.05){
+        S.angleDeg = flushAng;
+        const sl = document.getElementById('s-r');
+        if(sl){ sl.value = flushAng; }
+        const vR = document.getElementById('v-r');
+        if(vR) vR.textContent = flushAng.toFixed(1)+'°';
+      }
+      showToast('⚠ Ingen TEK17-løsning mulig — trinn satt til flush');
     }
+    const vR2 = document.getElementById('v-r');
+    if(vR2) vR2.textContent = (S.angleDeg||35).toFixed(1)+'°';
   } else {
-    // Normal mode:
-    // n bestemmes av høyde (målopptrinn ~185mm = TEK17-midtpunkt ved flush)
-    // inntrinn = opptrinn / tan(vinkel) — varierer med vinkelslider
-    // Profilen er alltid 250mm fysisk, men inntrinn kan være mer eller mindre
-    // avhengig av overlapp:
-    //   vinkel > flush-vinkel → inntrinn < 250mm → overlapp (trinn delvis over hverandre)
-    //   vinkel < flush-vinkel → inntrinn > 250mm → gap (trinn litt fra hverandre)
-    const aRad_n = Math.max(0.01, Math.min(80, S.angleDeg || 35)) * Math.PI / 180;
-    sd = P.TRINN_W; // fysisk profil for rendering
-    n  = Math.max(3, Math.round(H / 0.185)); // n fra høyde, ~185mm opptrinn
-    sh = H / n;
-    if(!isFinite(sh) || isNaN(sh)) sh = 0.185;
-    inntrinn = sh / Math.tan(aRad_n); // faktisk horisontal ganglinje
-    if(!isFinite(inntrinn) || isNaN(inntrinn)) inntrinn = P.TRINN_W;
     const vR = document.getElementById('v-r');
     if(vR) vR.textContent = (S.angleDeg||35).toFixed(1)+'°';
   }
@@ -2429,7 +2442,7 @@ function tekCheck(innMm, oppMm, angle, suffix){
   const formulaOk = formula >= 600 && formula <= 640;
   // TEK17: inntrinn må være flush = nøyaktig profil-bredde (250mm).
   // Mindre = overlapp, større = gap — begge utenfor TEK17.
-  const innOk     = Math.abs(innMm - Math.round(P.TRINN_W*1000)) <= 2; // ±2mm toleranse
+  const innOk     = Math.abs(innMm - Math.round(P.TRINN_W*1000)) <= 1; // ±1mm toleranse
   const oppOk     = oppMm <= 220;
   const angOk     = angle <= 42;
   const tek       = S.tek17; // only show fail/pass strictly when TEK17 is required
@@ -2513,23 +2526,27 @@ function updateStairSummary(n, sh, sd, inn, inn2){
     let sh2, opp2, ang2;
     const H2 = S.f2independent ? S.height2Cm/100 : S.heightCm/200; // total/2 per flight
     if(S.tek17){
+      const baseAng2 = S.f2independent ? (S.angle2Deg||35) : (S.angleDeg||35);
       let best2=null, bestScore2=Infinity;
       for(let ni=3;ni<=60;ni++){
         const shi=H2/ni, oppMm2=shi*1000;
         if(oppMm2>220||oppMm2<100) continue;
-        const formula2=2*oppMm2+P.TRINN_W*1000;
-        if(formula2<600||formula2>640) continue;
-        const ang3=Math.atan2(shi,P.TRINN_W)*180/Math.PI;
-        if(ang3>42||ang3<20) continue;
-        if(Math.abs(formula2-620)<bestScore2){bestScore2=Math.abs(formula2-620);best2={sh:shi};}
+        for(let innTest=244; innTest<=254; innTest+=0.5){
+          const formula2=2*oppMm2+innTest;
+          if(formula2<600||formula2>640) continue;
+          const ang3=Math.atan2(shi,innTest/1000)*180/Math.PI;
+          if(ang3>42||ang3<20) continue;
+          const score=Math.abs(ang3-baseAng2)*10+Math.abs(formula2-620);
+          if(score<bestScore2){bestScore2=score;best2={sh:shi,ang:Math.round(ang3*10)/10};}
+        }
       }
-      if(best2){ sh2=best2.sh; }
+      if(best2){ sh2=best2.sh; ang2=best2.ang; }
       else {
         const aRad2=S.f2independent?S.angle2Deg*Math.PI/180:S.angleDeg*Math.PI/180;
         sh2=H2/Math.max(3,Math.round(H2/(P.TRINN_W*Math.tan(aRad2))));
+        ang2=Math.round(Math.atan2(sh2,P.TRINN_W)*180/Math.PI*10)/10;
       }
       opp2=Math.round(sh2*1000);
-      ang2=Math.round(Math.atan2(sh2,P.TRINN_W)*180/Math.PI*10)/10;
     } else {
       const ang2deg = S.f2independent ? Math.max(0.1, S.angle2Deg||35) : Math.max(0.1, S.angleDeg||35);
       const ang2s = S.f2independent ? Math.max(0.1,S.angle2Deg||35) : Math.max(0.1,S.angleDeg||35);
