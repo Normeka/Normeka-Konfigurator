@@ -962,6 +962,11 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
           <div class="cl"><span>Trappvinkel</span><span class="cv cvs" id="v-r">35.0°</span></div>
           <input type="range" class="sr" id="s-r" min="25" max="45" value="35" step="0.1">
         </div>
+        <div class="cr">
+          <div class="cl"><span>Antall trinn</span><span class="cv cvs" id="v-n-steps">—</span></div>
+          <input type="range" class="sr" id="s-n-steps" min="3" max="30" value="13" step="1">
+        </div>
+        </div>
       </div>
 
       <div class="ss" id="f2-section" style="display:none;">
@@ -1376,7 +1381,7 @@ const S = {
   heightCm:240, widthMm:900, angleDeg:35,
   f2independent:false, height2Cm:200, angle2Deg:35,
   type:'straight', mat:'alu-raw',
-  handrail:true, riser:true, tek17:false, rail:'spiler', reposRail:true,
+  handrail:true, riser:true, tek17:false, rail:'spiler', reposRail:true, nManual:null,
   reposRailExcluded: new Set(), // set of excluded repos rail segment IDs
   flightRailExcluded: new Set()  // set of excluded flight rail segment IDs
 };
@@ -1575,10 +1580,14 @@ function buildStair(){
   // Vinkel er alltid styrende — n beregnes fra vinkel
   const aRad_n = Math.max(0.01, Math.min(80, S.angleDeg || 35)) * Math.PI / 180;
   sd = P.TRINN_W;
-  n  = Math.max(3, Math.round(H / (sd * Math.tan(aRad_n))));
+  if(S.nManual && !S.tek17){
+    n = Math.max(3, Math.min(30, S.nManual));
+  } else {
+    n = Math.max(3, Math.round(H / (sd * Math.tan(aRad_n))));
+  }
   sh = H / n;
   if(!isFinite(sh) || isNaN(sh)) sh = 0.185;
-  inntrinn = sh / Math.tan(aRad_n);
+  inntrinn = sh / Math.tan(aRad_n); // inntrinn følger alltid vinkel
   if(!isFinite(inntrinn) || isNaN(inntrinn)) inntrinn = sd;
 
   if(S.tek17){
@@ -1603,6 +1612,7 @@ function buildStair(){
     }
     if(best){
       n = best.n; sh = best.sh; inntrinn = best.inn;
+      S.nManual = best.n; // TEK17 setter nManual
       if(Math.abs(best.angle - S.angleDeg) > 0.05){
         S.angleDeg = best.angle;
         const sl = document.getElementById('s-r');
@@ -1629,6 +1639,8 @@ function buildStair(){
     const vR = document.getElementById('v-r');
     if(vR) vR.textContent = (S.angleDeg||35).toFixed(1)+'°';
   }
+  // Sync trinn slider
+  { const slN=document.getElementById('s-n-steps'); if(slN){slN.value=n;} const vN=document.getElementById('v-n-steps'); if(vN){vN.textContent=n+' trinn';} }
 
   // Flight 2: sd2 follows same logic as sd
   const H2  = S.f2independent ? S.height2Cm/100 : H;
@@ -2685,7 +2697,10 @@ function debounce(fn, ms){
 }
 const _debouncedBuildStair = debounce(buildStair, 60);
 const _debouncedBuildWalk  = debounce(buildWalk,  60);
-document.getElementById('s-h').addEventListener('input',function(){ S.heightCm=+this.value; document.getElementById('v-h').textContent=this.value+' cm'; buildStair(); });
+document.getElementById('s-h').addEventListener('input',function(){
+  S.nManual = null; // reset ved høyde-endring
+  S.heightCm=+this.value; document.getElementById('v-h').textContent=this.value+' cm'; buildStair();
+});
 document.getElementById('s-w').addEventListener('input',function(){
   S.widthMm=+this.value; document.getElementById('v-w').textContent=this.value+' mm';
   if(S.type!=='straight'){
@@ -2700,7 +2715,29 @@ document.getElementById('s-w').addEventListener('input',function(){
   }
   buildStair();
 });
-document.getElementById('s-r').addEventListener('input',function(){ S.angleDeg=+this.value; document.getElementById('v-r').textContent=(+this.value).toFixed(1)+'°'; buildStair(); });
+document.getElementById('s-r').addEventListener('input',function(){
+  S.angleDeg=+this.value;
+  document.getElementById('v-r').textContent=(+this.value).toFixed(1)+'°';
+  buildStair();
+  // Sync trinn slider from vinkel
+  _syncTrinnSlider();
+});
+
+document.getElementById('s-n-steps').addEventListener('input',function(){
+  const ni = +this.value;
+  S.nManual = ni;
+  document.getElementById('v-n-steps').textContent = ni + ' trinn';
+  buildStair();
+});
+function _syncTrinnSlider(){
+  const H = S.heightCm / 100;
+  const aRad = (S.angleDeg||35) * Math.PI / 180;
+  const ni = Math.max(3, Math.round(H / (P.TRINN_W * Math.tan(aRad))));
+  const sl = document.getElementById('s-n-steps');
+  if(sl) sl.value = ni;
+  const vn = document.getElementById('v-n-steps');
+  if(vn) vn.textContent = ni + ' trinn';
+}
 
 
 
