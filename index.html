@@ -6931,15 +6931,31 @@ function toggleForespDropdown() {
   const dd = document.getElementById('foresp-dropdown');
   if(!dd) return;
   const vis = dd.style.display === 'none' || !dd.style.display;
-  dd.style.display = vis ? 'block' : 'none';
-  if(vis) renderForespListe();
+  if(vis) {
+    // På mobil: plasser dropdown over mobil-knappen
+    const isMob = window.innerWidth <= 900;
+    if(isMob) {
+      dd.style.top = 'auto';
+      dd.style.bottom = '5rem';
+    } else {
+      dd.style.top = '52px';
+      dd.style.bottom = 'auto';
+    }
+    dd.style.display = 'block';
+    renderForespListe();
+  } else {
+    dd.style.display = 'none';
+  }
 }
 
 // Lukk dropdown ved klikk utenfor
 document.addEventListener('click', e => {
-  const dd  = document.getElementById('foresp-dropdown');
-  const btn = document.getElementById('foresp-header-btn');
-  if(dd && dd.style.display === 'block' && !dd.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+  const dd   = document.getElementById('foresp-dropdown');
+  const btn  = document.getElementById('foresp-header-btn');
+  const btnM = document.getElementById('foresp-mobile-btn');
+  const clickedBtn = (btn && (e.target === btn || btn.contains(e.target)))
+                  || (btnM && (e.target === btnM || btnM.contains(e.target)));
+  if(dd && dd.style.display === 'block' && !dd.contains(e.target) && !clickedBtn) {
     dd.style.display = 'none';
   }
 });
@@ -7546,7 +7562,7 @@ var MA = (() => {
 
 <!-- ── Forespørsel Dropdown ───────────────────────────── -->
 <div id="foresp-dropdown" style="display:none;position:fixed;top:52px;right:1rem;z-index:900;
-     width:320px;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+     width:min(320px,96vw);background:var(--surface);border:1px solid var(--border);border-radius:12px;
      box-shadow:0 8px 32px rgba(0,0,0,.18);overflow:hidden;">
   <div style="padding:.8rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
     <span style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;color:var(--nblue);">📋 Forespørsel</span>
