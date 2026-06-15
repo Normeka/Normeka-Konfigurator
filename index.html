@@ -962,6 +962,10 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
           <div class="cl"><span>Trappvinkel</span><span class="cv cvs" id="v-r">35.0°</span></div>
           <input type="range" class="sr" id="s-r" min="25" max="45" value="35" step="0.1">
         </div>
+        <div class="cr">
+          <div class="cl"><span>Antall trinn</span><span class="cv cvs" id="v-n-steps">—</span></div>
+          <input type="range" class="sr" id="s-n-steps" min="3" max="30" value="13" step="1">
+        </div>
       </div>
 
       <div class="ss" id="f2-section" style="display:none;">
@@ -1074,10 +1078,9 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div class="st sa">Overflatebehandling</div>
         <div class="mg">
           <button class="mb mbs" data-sm="alu-raw"><div class="ms" style="background:linear-gradient(135deg,#d8dce0,#b0b4b8)"></div><div class="ml">Ubehandlet</div></button>
-          <button class="mb" data-sm="alu-ano"><div class="ms" style="background:linear-gradient(135deg,#b8bcbf,#808488)"></div><div class="ml">Anodisert</div></button>
-          <button class="mb" data-sm="pw-gray"><div class="ms" style="background:linear-gradient(135deg,#8a8a88,#606060)"></div><div class="ml">Pulver grå</div></button>
+          <button class="mb" data-sm="alu-ano"><div class="ms" style="background:linear-gradient(135deg,#b8bcbf,#808488)"></div><div class="ml">Eloksert</div></button>
+          <button class="mb" data-sm="pw-gray"><div class="ms" style="background:linear-gradient(135deg,#6a6a68,#404040)"></div><div class="ml">Pulver grå</div></button>
           <button class="mb" data-sm="pw-black"><div class="ms" style="background:linear-gradient(135deg,#484846,#202020)"></div><div class="ml">Pulver sort</div></button>
-          <button class="mb" data-sm="pw-white"><div class="ms" style="background:linear-gradient(135deg,#f8f8f6,#e0e0de)"></div><div class="ml">Pulver hvit</div></button>
         </div>
       </div>
 
@@ -1216,9 +1219,9 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div class="st wa">Overflatebehandling</div>
         <div class="mg">
           <button class="mb mbw" data-wm="alu-raw"><div class="ms" style="background:linear-gradient(135deg,#d8dce0,#b0b4b8)"></div><div class="ml">Ubehandlet</div></button>
-          <button class="mb" data-wm="alu-ano"><div class="ms" style="background:linear-gradient(135deg,#b8bcbf,#808488)"></div><div class="ml">Anodisert</div></button>
+          <button class="mb" data-wm="alu-ano"><div class="ms" style="background:linear-gradient(135deg,#b8bcbf,#808488)"></div><div class="ml">Eloksert</div></button>
           <button class="mb" data-wm="galv"><div class="ms" style="background:linear-gradient(135deg,#c8ccc8,#909490)"></div><div class="ml">Galvanisert</div></button>
-          <button class="mb" data-wm="pw-gray"><div class="ms" style="background:linear-gradient(135deg,#8a8a88,#606060)"></div><div class="ml">Pulver grå</div></button>
+          <button class="mb" data-wm="pw-gray"><div class="ms" style="background:linear-gradient(135deg,#6a6a68,#404040)"></div><div class="ml">Pulver grå</div></button>
           <button class="mb" data-wm="pw-black"><div class="ms" style="background:linear-gradient(135deg,#484846,#202020)"></div><div class="ml">Pulver sort</div></button>
         </div>
       </div>
@@ -1376,7 +1379,7 @@ const S = {
   heightCm:240, widthMm:900, angleDeg:35,
   f2independent:false, height2Cm:200, angle2Deg:35,
   type:'straight', mat:'alu-raw',
-  handrail:true, riser:true, tek17:false, rail:'spiler', reposRail:true,
+  handrail:true, riser:true, tek17:false, rail:'spiler', reposRail:true, nManual:null,
   reposRailExcluded: new Set(), // set of excluded repos rail segment IDs
   flightRailExcluded: new Set()  // set of excluded flight rail segment IDs
 };
@@ -1418,7 +1421,7 @@ let _activeKonfigId = null;
 const MATS = {
   'alu-raw': [0xc8cdd2, 0.28, 0.78],
   'alu-ano': [0xa8acb0, 0.22, 0.82],
-  'pw-gray': [0x7a7a78, 0.60, 0.15],
+  'pw-gray': [0x555553, 0.60, 0.05],
   'pw-black':[0x2a2a28, 0.55, 0.20],
   'pw-white':[0xf0f0ee, 0.65, 0.10],
   'pw-custom':[0xf19d0d, 0.58, 0.12],
@@ -1573,30 +1576,34 @@ function buildStair(){
   let inntrinn2 = P.TRINN_W; // horisontal ganglinje F2
 
   if(S.tek17){
-    // Solve n: iterate to find n where TEK17 formula is satisfied
-    let best=null, bestScore=Infinity;
+    // TEK17: finn færrest mulige trinn (høyest vinkel) innenfor krav
+    // 2×opp + inntrinn ∈ [600-640], opp ≤ 220mm, vinkel ≤ 42°
+    // inntrinn = TRINN_W (flush). Itererer fra lavt n til høyt — tar første gyldige (= færrest trinn)
+    let best=null;
     for(let ni=3; ni<=60; ni++){
       const shi=H/ni;
       const oppMm=shi*1000;
-      if(oppMm>220||oppMm<100) continue;
+      if(oppMm>220||oppMm<80) continue;
       const formula=2*oppMm+sd*1000;
       if(formula<600||formula>640) continue;
       const ang=Math.atan2(shi,sd)*180/Math.PI;
-      if(ang>42||ang<20) continue;
-      const score=Math.abs(formula-620); // prefer formula closest to 620mm
-      if(score<bestScore){bestScore=score;best={n:ni,sh:shi,angle:Math.round(ang*10)/10};}
+      if(ang>42||ang<15) continue;
+      best={n:ni,sh:shi,angle:Math.round(ang*10)/10};
+      break; // første gyldige = færrest trinn = korteste/billigste trapp
     }
     if(best){
       n=best.n; sh=best.sh;
+      S.nManual=best.n;
       if(best.angle!==S.angleDeg){
         S.angleDeg=best.angle;
         const sl=document.getElementById('s-r');
         if(sl){sl.value=best.angle;document.getElementById('v-r').textContent=best.angle.toFixed(1)+'°';}
       }
     } else {
-      // Fallback: use current angle
+      // Fallback: flush-vinkel
       n=Math.max(3,Math.round(H/(sd*Math.tan(S.angleDeg*Math.PI/180))));
       sh=H/n;
+      showToast('⚠ Ingen TEK17-løsning mulig — trinn satt til flush');
     }
   } else {
     // Normal mode:
@@ -1608,7 +1615,11 @@ function buildStair(){
     //   vinkel < flush-vinkel → inntrinn > 250mm → gap (trinn litt fra hverandre)
     const aRad_n = Math.max(0.01, Math.min(80, S.angleDeg || 35)) * Math.PI / 180;
     sd = P.TRINN_W; // fysisk profil for rendering
-    n  = Math.max(3, Math.round(H / 0.185)); // n fra høyde, ~185mm opptrinn
+    if(S.nManual && !S.tek17){
+      n = S.nManual;
+    } else {
+      n = Math.max(3, Math.round(H / (P.TRINN_W * Math.tan(aRad_n))));
+    }
     sh = H / n;
     if(!isFinite(sh) || isNaN(sh)) sh = 0.185;
     inntrinn = sh / Math.tan(aRad_n); // faktisk horisontal ganglinje
@@ -1616,6 +1627,10 @@ function buildStair(){
     const vR = document.getElementById('v-r');
     if(vR) vR.textContent = (S.angleDeg||35).toFixed(1)+'°';
   }
+  // Sync trinnslider
+  { const slN=document.getElementById('s-n-steps');
+    if(slN){ const nNat=Math.max(3,Math.round(H/(P.TRINN_W*Math.tan(Math.max(0.01,(S.angleDeg||35)*Math.PI/180))))); slN.min=Math.max(3,nNat-4); slN.max=nNat+4; slN.value=n; }
+    const vN=document.getElementById('v-n-steps'); if(vN) vN.textContent=n+' trinn'; }
 
   // Flight 2: sd2 follows same logic as sd
   const H2  = S.f2independent ? S.height2Cm/100 : H;
@@ -1724,19 +1739,20 @@ function buildStair(){
     // Vanger — full flight length
     const flightRun  = treadCount * stepD;
     const flightRise = treadCount * riser;
-    const flightLen  = Math.sqrt(flightRun*flightRun + flightRise*flightRise);
+    // Vange strekker seg over alle n opptrinn inkl. siste steg til landing
+    const vangRun  = steps * stepD;
+    const vangRise = steps * riser;
+    const flightLen  = Math.sqrt(vangRun*vangRun + vangRise*vangRise);
     const slopeAngle = Math.atan2(flightRise, flightRun);
 
     for(let side of [-1,1]){
       const sideOff = side * (Wm/2 + P.VANG_W/2);
 
-      // Vange: boks langs skråningen, sentrert over trinnenes faktiske utstrekning
-      // Trinn i=0 har center lz=0, fysisk front=+stepD/2 → vangen må starte ved +stepD/2
       const VH  = P.VANG_H;
       const VW  = P.VANG_W;
       const vang = box(VW, VH, flightLen, matD);
-      const midZ = -((treadCount-1)/2) * stepD;  // sentrert over trinnene inkl. bredde
-      const midY = oy + (treadCount/2) * riser;
+      const midZ = -((steps-1)/2) * stepD;
+      const midY = oy + (steps/2) * riser;
       vang.rotation.order = 'YXZ';
       vang.rotation.y = dir;
       vang.rotation.x = slopeAngle;
@@ -1815,10 +1831,12 @@ function buildStair(){
         }
       }
 
-      // ── Håndløper langs skråningen ──
-      const midZ = -(steps/2)*stepD;
-      const midY = oy + (steps/2)*riser + riser + railTop - P.HL_H/2;
-      const hl = box(P.HL_W, P.HL_H, flightLen, matR);
+      // ── Håndløper langs skråningen — 150mm fremspring forbi første stender ──
+      const hlExt = 0.150; // 150mm fremspring
+      const hlLen = flightLen + hlExt;
+      const midZ = -(steps/2)*stepD + hlExt/2; // flytt senterpunkt mot bunn
+      const midY = oy + (steps/2)*riser + riser + railTop - P.HL_H/2 - (hlExt/2)*Math.sin(slopeAngle);
+      const hl = box(P.HL_W, P.HL_H, hlLen, matR);
       hl.rotation.order='YXZ'; hl.rotation.y=dir; hl.rotation.x=slopeAngle;
       const hlp = wp(midZ, sideOff);
       hl.position.set(hlp.x, midY, hlp.z);
@@ -2668,7 +2686,12 @@ function debounce(fn, ms){
 }
 const _debouncedBuildStair = debounce(buildStair, 60);
 const _debouncedBuildWalk  = debounce(buildWalk,  60);
-document.getElementById('s-h').addEventListener('input',function(){ S.heightCm=+this.value; document.getElementById('v-h').textContent=this.value+' cm'; buildStair(); });
+document.getElementById('s-h').addEventListener('input',function(){
+  S.heightCm=+this.value;
+  document.getElementById('v-h').textContent=this.value+' cm';
+  S.nManual = null;
+  buildStair();
+});
 document.getElementById('s-w').addEventListener('input',function(){
   S.widthMm=+this.value; document.getElementById('v-w').textContent=this.value+' mm';
   if(S.type!=='straight'){
@@ -2683,7 +2706,33 @@ document.getElementById('s-w').addEventListener('input',function(){
   }
   buildStair();
 });
-document.getElementById('s-r').addEventListener('input',function(){ S.angleDeg=+this.value; document.getElementById('v-r').textContent=(+this.value).toFixed(1)+'°'; buildStair(); });
+document.getElementById('s-r').addEventListener('input',function(){
+  S.angleDeg=+this.value;
+  document.getElementById('v-r').textContent=(+this.value).toFixed(1)+'°';
+  S.nManual = null; // reset manuelt valg ved vinkelendring
+  buildStair();
+  _syncTrinnSlider();
+});
+document.getElementById('s-n-steps').addEventListener('input',function(){
+  const H = S.heightCm / 100;
+  const aRad = (S.angleDeg||35) * Math.PI / 180;
+  const nNat = Math.max(3, Math.round(H / (P.TRINN_W * Math.tan(aRad))));
+  const ni = Math.max(nNat - 4, Math.min(nNat + 4, +this.value));
+  this.value = ni;
+  S.nManual = ni;
+  document.getElementById('v-n-steps').textContent = ni + ' trinn';
+  buildStair();
+});
+function _syncTrinnSlider(){
+  const H = S.heightCm / 100;
+  const aRad = (S.angleDeg||35) * Math.PI / 180;
+  const nNat = Math.max(3, Math.round(H / (P.TRINN_W * Math.tan(aRad))));
+  const ni = S.nManual || nNat;
+  const sl = document.getElementById('s-n-steps');
+  if(sl){ sl.min = Math.max(3, nNat-4); sl.max = nNat+4; sl.value = ni; }
+  const vn = document.getElementById('v-n-steps');
+  if(vn) vn.textContent = ni + ' trinn';
+}
 
 
 
@@ -7071,7 +7120,7 @@ function goHome() {
         <li>Vanger i ekstrudert aluminium — lav egenvekt, høy stivhet</li>
         <li>Spilerekkverk med maks 95 mm åpning — TEK17-godkjent</li>
         <li>Tilgjengelig med repos: 90° høyre, 90° venstre og 180°</li>
-        <li>Overflatebehandling: ubehandlet, anodisert, pulverlakk</li>
+        <li>Overflatebehandling: ubehandlet, eloksert, pulverlakk</li>
       </ul>
 
       <h3>Ampliform Gangbane</h3>
@@ -7116,7 +7165,7 @@ function goHome() {
         <span class="info-tag">offshore trapp</span>
         <span class="info-tag">prosessindustri</span>
         <span class="info-tag">pulverlakk aluminium</span>
-        <span class="info-tag">anodisert aluminium</span>
+        <span class="info-tag">eloksert aluminium</span>
       </div>
 
     </div>
