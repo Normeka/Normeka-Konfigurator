@@ -202,10 +202,12 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
   #cv,#cv2d{width:100%!important;height:100%!important;}
 
   /* Sidebar scrolls independently below the canvas */
-  .sidebar{width:100%;flex:1 1 0;overflow-y:auto;-webkit-overflow-scrolling:touch;border-left:none;border-top:2px solid var(--border);}
+  .sidebar{width:100%;flex:1 1 0;overflow-y:auto;-webkit-overflow-scrolling:touch;border-left:none;border-top:2px solid var(--border);padding-bottom:6rem;}
 
   /* Header compact */
-  header{padding:.4rem .8rem;}
+  header{padding:.4rem .5rem;}
+  #foresp-header-btn{font-size:.7rem;padding:.25rem .5rem;}
+  #foresp-header-btn span{display:none;}
   .logo-wrap img{height:26px!important;}
   .logo-sub{display:none;}
   .mode-tabs{gap:4px;}
@@ -1749,19 +1751,20 @@ function buildStair(){
     // Vanger — full flight length
     const flightRun  = treadCount * stepD;
     const flightRise = treadCount * riser;
-    const flightLen  = Math.sqrt(flightRun*flightRun + flightRise*flightRise);
+    // Vange strekker seg over alle n opptrinn (inkl. siste steg til landing)
+    const vangRun  = steps * stepD;
+    const vangRise = steps * riser;
+    const flightLen  = Math.sqrt(vangRun*vangRun + vangRise*vangRise);
     const slopeAngle = Math.atan2(flightRise, flightRun);
 
     for(let side of [-1,1]){
       const sideOff = side * (Wm/2 + P.VANG_W/2);
 
-      // Vange: boks langs skråningen, sentrert over trinnenes faktiske utstrekning
-      // Trinn i=0 har center lz=0, fysisk front=+stepD/2 → vangen må starte ved +stepD/2
       const VH  = P.VANG_H;
       const VW  = P.VANG_W;
       const vang = box(VW, VH, flightLen, matD);
-      const midZ = -((treadCount-1)/2) * stepD;  // sentrert over trinnene inkl. bredde
-      const midY = oy + (treadCount/2) * riser;
+      const midZ = -((steps-1)/2) * stepD;
+      const midY = oy + (steps/2) * riser;
       vang.rotation.order = 'YXZ';
       vang.rotation.y = dir;
       vang.rotation.x = slopeAngle;
@@ -2718,13 +2721,18 @@ document.getElementById('s-w').addEventListener('input',function(){
 document.getElementById('s-r').addEventListener('input',function(){
   S.angleDeg=+this.value;
   document.getElementById('v-r').textContent=(+this.value).toFixed(1)+'°';
+  S.nManual = null; // reset manuelt valg ved vinkelendring
   buildStair();
-  // Sync trinn slider from vinkel
   _syncTrinnSlider();
 });
 
 document.getElementById('s-n-steps').addEventListener('input',function(){
-  const ni = +this.value;
+  // Clamp n til ±2 fra naturlig verdi (vinkel-basert)
+  const H = S.heightCm / 100;
+  const aRad = (S.angleDeg||35) * Math.PI / 180;
+  const nNatural = Math.max(3, Math.round(H / (P.TRINN_W * Math.tan(aRad))));
+  const ni = Math.max(nNatural - 4, Math.min(nNatural + 4, +this.value));
+  this.value = ni; // snap slider
   S.nManual = ni;
   document.getElementById('v-n-steps').textContent = ni + ' trinn';
   buildStair();
@@ -2732,9 +2740,10 @@ document.getElementById('s-n-steps').addEventListener('input',function(){
 function _syncTrinnSlider(){
   const H = S.heightCm / 100;
   const aRad = (S.angleDeg||35) * Math.PI / 180;
-  const ni = Math.max(3, Math.round(H / (P.TRINN_W * Math.tan(aRad))));
+  const nNat = Math.max(3, Math.round(H / (P.TRINN_W * Math.tan(aRad))));
+  const ni = S.nManual || nNat;
   const sl = document.getElementById('s-n-steps');
-  if(sl) sl.value = ni;
+  if(sl){ sl.min = Math.max(3, nNat-4); sl.max = nNat+4; sl.value = ni; }
   const vn = document.getElementById('v-n-steps');
   if(vn) vn.textContent = ni + ' trinn';
 }
