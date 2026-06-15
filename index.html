@@ -211,7 +211,8 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
   .mode-tabs{gap:3px;}
   .mode-tab{font-size:.68rem;padding:.25rem .4rem;}
   #dark-toggle{font-size:.72rem;padding:.25rem .4rem;}
-  #foresp-header-btn{font-size:.72rem;padding:.25rem .45rem;white-space:nowrap;}
+  #foresp-header-btn{display:none;}
+  #foresp-mobile-btn{display:flex!important;}
 
   /* TEK17 panel — move below canvas */
   .tek-panel{display:none!important;}  /* hidden on mobile — shown inline in sidebar */
@@ -833,6 +834,17 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
     <div id="cv2d-wrap" style="display:none;position:absolute;inset:0;overflow:auto;background:#f8f7f3;">
       <canvas id="cv2d" style="display:block;"></canvas>
     </div>
+    <!-- Forespørsel-knapp mobil -->
+    <button id="foresp-mobile-btn" onclick="toggleForespDropdown()"
+      style="display:none;position:absolute;bottom:1rem;right:1rem;z-index:50;
+             align-items:center;gap:.4rem;padding:.45rem .8rem;border-radius:20px;
+             border:2px solid var(--nblue);background:var(--surface);color:var(--nblue);
+             font-family:'Barlow',sans-serif;font-size:.82rem;font-weight:700;
+             cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15);">
+      📋 <span id="foresp-mobile-badge" style="display:none;background:var(--nblue);color:#fff;
+        border-radius:10px;padding:0 6px;font-size:.7rem;">0</span>
+      Forespørsel
+    </button>
     <!-- Zoom slider -->
     <!-- ══ MOBIL SENTERPUNKT-KNAPP ══ -->
 <div id="lib-center-btn-wrap" style="
@@ -6849,6 +6861,9 @@ function oppdaterForespBadge() {
     badge.style.display = items.length > 0 ? 'inline' : 'none';
   }
   if(btn) btn.style.borderColor = items.length > 0 ? 'var(--nblue)' : '';
+  // Sync mobile badge
+  const mbadge = document.getElementById('foresp-mobile-badge');
+  if(mbadge){ mbadge.textContent = items.length; mbadge.style.display = items.length > 0 ? 'inline' : 'none'; }
   const sendBtn = document.getElementById('foresp-send-btn');
   if(sendBtn) {
     sendBtn.disabled = items.length === 0;
