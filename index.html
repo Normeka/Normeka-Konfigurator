@@ -5503,7 +5503,7 @@ const _HARDCODED_LIBRARY = {
 
 const LIB = (() => {
   const PW        = '405d6335d8f946d0536de22a7f47ba854283e7885aec3fa2b92f202541b1f62e'; // sha256
-  const ADMIN_PW  = '4f896a311c85cba603ce9550e4c5634fafb5109c5baca97e63f887247c40f465'; // sha256('1992')
+  const ADMIN_PW  = '4aedc8c46ea7939d1c7d50fd6833ce12d5e8ff78085277865a797227a4de2d1f'; // sha256('TheRealNormeka!')
   const STORE_KEY = 'nlib_v2';
 
   // ── State ──────────────────────────────────────────────
@@ -6324,7 +6324,7 @@ const LIB = (() => {
       if (typeof renderer !== 'undefined') renderer.render(scene, cam);
     }, 270);
   }
-  return { enter, exit, checkPw, checkAdminPw, openLogin, isActive: () => active, unhideAll: _libUnhideAll, toggleCenterPick, toggleCollapse };
+  return { enter, exit, checkPw, checkAdminPw, openLogin, isActive: () => active, unhideAll: _libUnhideAll, toggleCenterPick, toggleCollapse, unlock: () => { unlocked = true; } };
 })();
 
 // ── Zoom slider ───────────────────────────────────────────
@@ -6818,6 +6818,9 @@ function checkGearLogin() {
       const ma  = document.getElementById('ma-welcome-card');
       if (lib) lib.style.removeProperty('display');
       if (ma)  ma.style.removeProperty('display');
+      // Samme passord som gear-lås — lås opp biblioteket med det samme
+      // slik at man ikke må taste det inn på nytt ved første åpning
+      if (typeof LIB !== 'undefined' && LIB.unlock) LIB.unlock();
       showToast('✓ Intern modus aktivert');
     } else {
       document.getElementById('gear-err').style.display = 'block';
