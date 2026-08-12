@@ -1426,6 +1426,19 @@ const REPOS = {
   f2zMm: 0        // r90: flight2 position along repos depth (Z)
 };
 
+// ── Autoritative default-state (for konfigAdd / nye configer) ──
+// Tas som et engangs-øyeblikksbilde HER, rett etter S/W/REPOS er deklarert
+// og FØR noe (slidere, initReposSliders, osv.) rekker å mutere dem. Dette er
+// den ENE kilden _freshStairS()/_freshWalkW()/_freshREPOS() (se lenger ned)
+// bygger på — nye felter lagt til i S/W/REPOS-literalene over blir dermed
+// automatisk en del av "fresh state" for nye konfigurasjoner, uten at noen
+// trenger å huske å oppdatere en egen, separat hardkodet kopi (det var
+// nettopp det som tidligere gjorde at konfigAdd sin frittstående "freshS"
+// hardkoding hadde driftet ut av sync — bl.a. manglet den S.nManual).
+const _DEFAULT_S = { ...S };
+const _DEFAULT_W = { ...W };
+const _DEFAULT_REPOS = { ...REPOS };
+
 // ── Multi-konfig state (must be before startup calls) ──
 let _nextKonfigId = 1;
 const _konfigList = [];
@@ -2660,8 +2673,19 @@ function startMode(m){
 // ─── MODE ────────────────────────────────────────────────
 let currentMode='stair';
 
-
-function switchMode(m){
+// _applyModePanels(m): LAVNIVÅ — bytter kun synlige paneler og bygger 3D for
+// currentMode. Forutsetter at riktig S/W/REPOS/WalkSegs for target-modusen
+// ALLEREDE er lastet inn i runtime (dvs. kalles fra konfigSwitch() ETTER at
+// target-configens state er anvendt). Kalles ALDRI direkte fra UI/onclick —
+// se switchMode() under.
+// MERK: nullstiller IKKE lenger WalkSegs her (det gjorde den tidligere, med
+// et eget switchMode._skipReset-hack for å prøve å unngå det ved konfigbytte
+// — men det hacket forhindret bare nullstillingen uten å faktisk gjenopprette
+// riktige seksjoner, som var kilden til at gangbane-seksjoner lekket mellom
+// konfigurasjoner). WalkSegs sitt livssyklus eies nå fullt ut av
+// konfigSaveCurrent()/konfigSwitch() (se _snapWalkSegs/_applyWalkSegs), som
+// alltid har satt riktig WalkSegs for target-configen FØR denne kalles.
+function _applyModePanels(m){
   // Rydd MA-geometri hvis vi bytter vekk fra MA
   if (typeof MA !== 'undefined' && MA.isActive()) {
     MA._cleanup();
@@ -2681,14 +2705,33 @@ function switchMode(m){
   dimActive = false;
   document.getElementById('dim-overlay').style.display = 'none';
   document.getElementById('dim-lines').innerHTML = '';
-  if(m==='walk'){ if(!switchMode._skipReset){WalkSegs.length=0; walkSegNextId=1;} walkDimActive=false; document.getElementById('btn-walk-dim').classList.remove('vt-active'); setView('3d');
+  if(m==='walk'){ walkDimActive=false; document.getElementById('btn-walk-dim').classList.remove('vt-active'); setView('3d');
     document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Legg til seksjoner i sidepanelet'; }
   else { document.getElementById('canvas-hint').textContent='🖱 Dra for å rotere · Scroll for å zoome · Klikk for mål'; }
   document.getElementById('mapanel').classList.toggle('visible', m==='ma');
   if(m==='stair') buildStair();
   else if(m==='walk') { buildWalk(); setTimeout(initSketchIfNeeded, 50); }
   // m==='ma': MA._enter() handles scene
+}
 
+// switchMode(m): HØYNIVÅ — dette er det UI (tab-s/tab-w, startMode, osv.)
+// faktisk skal kalle. BUG (fikset): header-fanene "Trappkonfigurator"/
+// "Gangbanekonfigurator" kalte tidligere _applyModePanels (den gamle
+// switchMode) DIREKTE, og hoppet dermed helt forbi konfigSaveCurrent()/
+// konfigSwitch(). Det betød at et klikk der IKKE committet ulagrede
+// endringer i aktiv config, IKKE lastet riktig state for målmodusen, og
+// etterlot _activeKonfigId pekende på en config som ikke lenger stemte
+// med det som faktisk ble vist/bygget i 3D — nøyaktig den typen
+// "runtime-state samsvarer ikke med activeConfig"-bug arkitekturen skal
+// forhindre. Nå ruter ethvert modusbytte alltid via konfig-systemet.
+function switchMode(m){
+  if(m==='ma' || m==='library'){ _applyModePanels(m); return; } // MA/bibliotek er egne moduser utenfor konfig-systemet
+  if(typeof _konfigList==='undefined' || !_konfigList.length){ _applyModePanels(m); return; } // tidlig oppstart, før initMultiKonfig()
+  const active = _konfigList.find(k=>k.id===_activeKonfigId);
+  if(active && active.mode===m) return; // riktig config er allerede aktiv — ingenting å gjøre
+  const existing = _konfigList.find(k=>k.mode===m);
+  if(existing) konfigSwitch(existing.id);
+  else konfigAdd(m);
 }
 
 // ─── CONTROLS ────────────────────────────────────────────
@@ -3110,90 +3153,38 @@ function decodeConfigId(id){
     return JSON.parse(decodeURIComponent(escape(atob(b64))));
   }catch(e){ return null; }
 }
-function applyStairState(data){
-  Object.assign(S, data);
-  // Restore REPOS state if present
-  if(data._repos){
-    Object.assign(REPOS, data._repos);
-    if(data._repos.reposRailExcluded)
-      S.reposRailExcluded = new Set(data._repos.reposRailExcluded);
-    if(data._flightRailExcluded)
-      S.flightRailExcluded = new Set(data._flightRailExcluded);
-  }
-  document.getElementById('s-h').value=S.heightCm; document.getElementById('v-h').textContent=S.heightCm+' cm';
-  document.getElementById('s-w').value=S.widthMm;  document.getElementById('v-w').textContent=S.widthMm+' mm';
-  document.getElementById('s-r').value=S.angleDeg; document.getElementById('v-r').textContent=S.angleDeg+'°';
-  document.getElementById('s-h2').value=S.height2Cm; document.getElementById('v-h2').textContent=S.height2Cm+' cm';
-  document.getElementById('s-r2').value=S.angle2Deg; document.getElementById('v-r2').textContent=S.angle2Deg+'°';
-  document.querySelectorAll('[data-st]').forEach(b=>{b.classList.toggle('tbs',b.dataset.st===S.type);});
-  document.querySelectorAll('[data-sm]').forEach(b=>{b.classList.toggle('mbs',b.dataset.sm===S.mat);});
-  document.querySelectorAll('[data-rl]').forEach(b=>{b.classList.toggle('tbs',b.dataset.rl===S.rail);});
-  ['handrail','riser','tek17','f2independent','reposRail'].forEach(k=>{
-    const bx=document.getElementById('sb-'+k);
-    if(bx) bx.classList.toggle('cbs',!!S[k]);
-  });
-  // Restore angle slider lock state for TEK17
-  const srLock=S.tek17;
-  const sr=document.getElementById('s-r'), sr2=document.getElementById('s-r2');
-  if(sr)  { sr.disabled=srLock;  sr.style.opacity=srLock?'0.4':'1'; }
-  if(sr2) { sr2.disabled=srLock; sr2.style.opacity=srLock?'0.4':'1'; }
-  // Restore repos sliders
-  const isRepos=S.type!=='straight';
-  document.getElementById('f2-section').style.display=isRepos?'block':'none';
-  document.getElementById('repos-section').style.display=isRepos?'block':'none';
-  document.getElementById('f2-controls').style.display=S.f2independent?'block':'none';
-  document.getElementById('r90-positions').style.display=(S.type==='r90r'||S.type==='r90l')?'block':'none';
-  document.getElementById('r180-positions').style.display=S.type==='r180'?'block':'none';
-  document.getElementById('f2-offset-row').style.display='none'; // now inside r180-positions
-  if(isRepos && REPOS.breddeMm){
-    document.getElementById('s-rb').value=REPOS.breddeMm; document.getElementById('v-rb').textContent=REPOS.breddeMm+' mm';
-    document.getElementById('s-rd').value=REPOS.dybdeMm;  document.getElementById('v-rd').textContent=REPOS.dybdeMm+' mm';
-    document.getElementById('s-f2x').value=REPOS.f2offsetMm||0; document.getElementById('v-f2x').textContent=(REPOS.f2offsetMm||0)+' mm';
-    document.getElementById('s-f1x').value=REPOS.f1xMm||0; document.getElementById('v-f1x').textContent=(REPOS.f1xMm||0)+' mm';
-    document.getElementById('s-f2z').value=REPOS.f2zMm||0; document.getElementById('v-f2z').textContent=_f2zGapText(REPOS.f2zMm||0);
-    const f1x180=document.getElementById('s-f1x-180');
-    if(f1x180){ f1x180.value=REPOS.f1x180Mm||0; document.getElementById('v-f1x-180').textContent=(REPOS.f1x180Mm||0)+' mm'; }
-  }
-  // Update height label
-  const lblH=document.getElementById('lbl-h');
-  if(lblH) lblH.textContent=(isRepos&&S.f2independent)?'Høyde Flight 1':'Høyde';
-  switchMode('stair'); buildStair();
-}
-function applyWalkState(data){
-  Object.assign(W,data);
-  document.getElementById('w-l').value=W.length; document.getElementById('wv-l').textContent=W.length+' m';
-  document.getElementById('w-h').value=W.height; document.getElementById('wv-h').textContent=W.height+' cm';
-  document.getElementById('w-s').value=W.span;   document.getElementById('wv-s').textContent=W.span+' cm';
-  document.getElementById('w-bw').value=W.widthCm||120; document.getElementById('wv-bw').textContent=(W.widthCm||120)+' cm';
-  document.querySelectorAll('[data-wb]').forEach(b=>{b.classList.toggle('tbw',b.dataset.wb===W.bearing);});
-  document.querySelectorAll('[data-gr]').forEach(b=>{b.classList.toggle('tbw',b.dataset.gr===W.grating);});
-  document.querySelectorAll('[data-wm]').forEach(b=>{b.classList.toggle('mbw',b.dataset.wm===W.mat);});
-  document.querySelectorAll('[data-wr]').forEach(b=>{b.classList.toggle('tbw',b.dataset.wr===W.railType);});
-  document.getElementById('w-span-row').style.display=W.bearing==='posts'?'block':'none';
-  document.getElementById('w-height-row').style.display=W.bearing==='posts'?'block':'none';
-  // Restore sketch if present
+// Synkroniserer 2D-sketch-canvasets runtime-state (SK.points/SK.closed) og
+// synligheten av sketch-relaterte paneler fra W.sketchPoints/W.sketchClosed.
+// FUNN: dette gjorde tidligere bare den nå fjernede applyWalkState() — som
+// ikke lenger ble kalt av noe etter refaktoreringen (GLB-eksport bruker nå
+// applySnapW() direkte, og delt/lastet prosjekt går via konfigSwitch()).
+// Uten denne ville 2D-sketch-canvaset vist FORRIGE aktive configs
+// tegning inntil brukeren tilfeldigvis åpnet sketch-modus på nytt — selve
+// 3D-geometrien var upåvirket (buildWalk() leser W.sketchPoints direkte),
+// men UI-et for å REDIGERE sketchen ville vært feil/lekket mellom configer.
+function _applySketchFromW(){
+  if(typeof SK === 'undefined') return;
   if(W.sketchPoints && W.sketchClosed){
     SK.points = W.sketchPoints.map(p=>({x:p.x,y:p.y}));
     SK.closed = true;
     setTimeout(()=>{ sketchInit(); sketchDraw(); }, 100);
-    // Hide irrelevant panels and show sketch status
-    document.getElementById('sketch-status').style.display='block';
-    document.getElementById('sketch-note').style.display='block';
-    document.getElementById('sketch-clear-btn').style.display='';
+    const stEl=document.getElementById('sketch-status'); if(stEl) stEl.style.display='block';
+    const noteEl=document.getElementById('sketch-note'); if(noteEl) noteEl.style.display='block';
+    const clrBtn=document.getElementById('sketch-clear-btn'); if(clrBtn) clrBtn.style.display='';
     ['walk-dimensjoner-section','walk-bearing-section','walk-grating-section','walk-rail-section','walk-surface-section'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='none';
     });
   } else {
     SK.points=[]; SK.closed=false;
-    document.getElementById('sketch-status').style.display='none';
-    document.getElementById('sketch-note').style.display='none';
-    document.getElementById('sketch-clear-btn').style.display='none';
+    const stEl=document.getElementById('sketch-status'); if(stEl) stEl.style.display='none';
+    const noteEl=document.getElementById('sketch-note'); if(noteEl) noteEl.style.display='none';
+    const clrBtn=document.getElementById('sketch-clear-btn'); if(clrBtn) clrBtn.style.display='none';
     ['walk-dimensjoner-section','walk-bearing-section','walk-grating-section','walk-rail-section','walk-surface-section'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='';
     });
   }
-  switchMode('walk'); buildWalk();
 }
+
 function copyConfigId(prefix){
   const el = document.getElementById(prefix+'-config-id-display');
   const full = el.dataset.full || el.textContent;
@@ -3209,16 +3200,11 @@ function copyConfigId(prefix){
 async function loadConfigById(){
   const raw=(document.getElementById('load-config-input').value||'').trim();
   if(!raw){showToast('Lim inn en konfig-ID først');return;}
-  // Kort ID (TRP-XXXX) → hent fra Supabase
-  if(raw.split('-').length <= 2) {
-    try {
-      showToast('Henter konfigurasjon…');
-      const result = await sbLoadConfig(raw);
-      applySbState(result.state);
-    } catch(e) { showToast('❌ Fant ikke ID: ' + raw); return; }
-  } else {
-    loadMultiConfigId(raw);
-  }
+  try {
+    showToast('Henter konfigurasjon…');
+    const n = await _loadAnyShareId(raw);
+    showToast('✓ '+n+' konfigurasjon'+(n===1?'':'er')+' lastet!');
+  } catch(e) { showToast('❌ Fant ikke ID: ' + raw); return; }
   const wrap=document.getElementById('s-excel-wrap');
   if(wrap) wrap.style.display='block';
 }
@@ -3226,15 +3212,11 @@ async function loadConfigById(){
 async function loadConfigByIdW(){
   const raw=(document.getElementById('load-config-input-w').value||'').trim();
   if(!raw){showToast('Lim inn en konfig-ID først');return;}
-  if(raw.split('-').length <= 2) {
-    try {
-      showToast('Henter konfigurasjon…');
-      const result = await sbLoadConfig(raw);
-      applySbState(result.state);
-    } catch(e) { showToast('❌ Fant ikke ID: ' + raw); return; }
-  } else {
-    loadMultiConfigId(raw);
-  }
+  try {
+    showToast('Henter konfigurasjon…');
+    const n = await _loadAnyShareId(raw);
+    showToast('✓ '+n+' konfigurasjon'+(n===1?'':'er')+' lastet!');
+  } catch(e) { showToast('❌ Fant ikke ID: ' + raw); return; }
   const wrap=document.getElementById('w-excel-wrap');
   if(wrap) wrap.style.display='block';
 }
@@ -3583,71 +3565,182 @@ function generateMultiConfigId(){
   return 'MLT-'+chk+'-'+b64;
 }
 
-function applySbState(data) {
-  if (!data) { showToast('❌ Tom konfigurasjon'); return; }
-  if (data._multiMode && data.configs && data.configs.length > 0) {
-    _konfigList.length = 0;
-    _activeKonfigId = null;
-    _nextKonfigId = 1;
-    data.configs.forEach((c, idx) => {
-      const id = _nextKonfigId++;
-      const sS = { ...c.snapS,
-        reposRailExcluded: new Set(c.snapS.reposRailExcluded||[]),
-        flightRailExcluded: new Set(c.snapS.flightRailExcluded||[])
-      };
-      _konfigList.push({ id, mode: c.mode,
-        label: c.label || (c.mode==='stair'?'Trapp '+(idx+1):'Gangbane '+(idx+1)),
-        snapS: sS, snapW: {...c.snapW}, snapREPOS: {...c.snapREPOS}
-      });
-    });
-    konfigSwitch(_konfigList[0].id);
-    showToast('✓ ' + _konfigList.length + ' konfigurasjoner lastet!');
-  } else if (data._mode === 'stair') {
-    applyStairState(data); buildStair(); switchMode('stair');
-    showToast('✓ Konfigurasjon lastet!');
-  } else if (data._mode === 'walk') {
-    applyWalkState(data); buildWalk(); switchMode('walk');
-    showToast('✓ Konfigurasjon lastet!');
-  } else {
-    showToast('❌ Ukjent konfigurasjonstype');
-  }
+// ══════════════════════════════════════════════════════════════════
+// PROSJEKT-ARKITEKTUR — én pipeline for lagring, lasting og deling
+// ══════════════════════════════════════════════════════════════════
+// Et "prosjekt" = { schemaVersion, configs:[ {id, mode, label, state} ] }.
+// _konfigList ER prosjektets configs i runtime-form (snapS/snapW/snapREPOS/
+// walkSegs som levende objekter/Set-er). serializeProject()/deserializeProject()
+// er den ENE broen mellom runtime-formen og den JSON-trygge, delbare formen.
+// Dette erstatter de tre tidligere, delvis overlappende systemene:
+//   1) generateConfigId/decodeConfigId (selvstendig base64 i e-post — beholdt,
+//      urørt, kun brukt til e-postutsendelse, IKKE en del av delefunksjonen)
+//   2) generateMultiConfigId/loadMultiConfigId sitt MLT-base64-format
+//   3) sbSaveConfig/sbLoadConfig med hash-baserte, kollisjonssårbare ID-er
+//      og to ulike payload-formater (rå S/W for enkeltkonfig vs snap*-array for multi)
+const PROJECT_SCHEMA_VERSION = 1;
+
+function serializeProject(){
+  commitActiveConfig();
+  return {
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    configs: _konfigList.map(k => ({
+      mode: k.mode,
+      label: k.label,
+      state: k.mode==='stair'
+        ? { S: { ...k.snapS,
+              reposRailExcluded: [...(k.snapS.reposRailExcluded||[])],
+              flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
+            REPOS: { ...k.snapREPOS } }
+        : { W: { ...k.snapW, sketchRailExcluded: [...(k.snapW.sketchRailExcluded||[])] },
+            walkSegs: k.walkSegs ? { segs: k.walkSegs.segs.map(s=>({...s})), nextId: k.walkSegs.nextId } : { segs:[], nextId:1 } }
+    }))
+  };
 }
 
-function loadMultiConfigId(raw){
-  const data = decodeConfigId(raw);
-  if(!data){ alert('Ugyldig ID.'); return; }
+function migrateProject(data){
+  // Enkel, ikke-overengineert migreringsmekanisme for fremtidige schemaVersion-bumper.
+  if(!data.schemaVersion) data.schemaVersion = 1;
+  // (fremtidige "if(data.schemaVersion < N){ ...migrer...; data.schemaVersion = N; }" blokker legges her)
+  return data;
+}
 
-  if(data._multiMode && data.configs && data.configs.length > 0){
-    // Clear existing configs
-    _konfigList.length = 0;
-    _activeKonfigId = null;
-    _nextKonfigId = 1;
+// Bygger ett runtime _konfigList-element fra ett prosjekt-configs[]-element.
+// Defensiv mot korrupt/legacy data hvor et Set kan ha blitt til '{}' via
+// JSON.stringify (Set-er serialiseres ikke automatisk — se historikk over).
+function _toArraySafe(v){ return Array.isArray(v) ? v : []; }
 
-    data.configs.forEach((c, idx) => {
-      const id = _nextKonfigId++;
-      // Restore Sets
-      const sS = { ...c.snapS,
-        reposRailExcluded: new Set(c.snapS.reposRailExcluded||[]),
-        flightRailExcluded: new Set(c.snapS.flightRailExcluded||[])
-      };
-      _konfigList.push({
-        id, mode: c.mode,
-        label: c.label || (c.mode==='stair'?'Trapp '+(idx+1):'Gangbane '+(idx+1)),
-        snapS: sS,
-        snapW: { ...c.snapW },
-        snapREPOS: { ...c.snapREPOS }
-      });
-    });
-    // Switch to first config
-    konfigSwitch(_konfigList[0].id);
-    showToast('✓ '+_konfigList.length+' konfigurasjoner lastet!');
-  } else if(data._mode==='stair'){
-    applyStairState(data); buildStair(); switchMode('stair');
-    showToast('✓ Konfigurasjon lastet!');
-  } else if(data._mode==='walk'){
-    applyWalkState(data); buildWalk(); switchMode('walk');
-    showToast('✓ Konfigurasjon lastet!');
+function _deserializeConfigEntry(entry, id){
+  if(entry.mode==='stair'){
+    const s = (entry.state && entry.state.S) || {};
+    const snapS = { ..._freshStairS(), ...s,
+      reposRailExcluded: new Set(_toArraySafe(s.reposRailExcluded)),
+      flightRailExcluded: new Set(_toArraySafe(s.flightRailExcluded)) };
+    const snapREPOS = { ..._freshREPOS(), ...((entry.state && entry.state.REPOS) || {}) };
+    return { id, mode:'stair', label: entry.label || 'Trapp', snapS, snapW: _freshWalkW(), snapREPOS, walkSegs:null };
   }
+  const w = (entry.state && entry.state.W) || {};
+  const snapW = { ..._freshWalkW(), ...w, sketchRailExcluded: new Set(_toArraySafe(w.sketchRailExcluded)) };
+  const ws = (entry.state && entry.state.walkSegs) || {segs:[],nextId:1};
+  return { id, mode:'walk', label: entry.label || 'Gangbane', snapS: _freshStairS(), snapW, snapREPOS: _freshREPOS(),
+    walkSegs: { segs: _toArraySafe(ws.segs).map(s=>({...s})), nextId: ws.nextId||1 } };
+}
+
+// Erstatter HELE det gjeldende prosjektet (kontrollert — ingen gamle configs
+// blir liggende igjen som duplikater). Returnerer id-en til første config.
+function deserializeProject(raw){
+  const data = migrateProject(raw);
+  if(!data || !Array.isArray(data.configs) || !data.configs.length) throw new Error('Tomt eller ugyldig prosjekt');
+  _konfigList.length = 0;
+  _activeKonfigId = null; // viktig: ingen aktiv config → konfigSwitch under vil IKKE committe noe over den nyinnlastede dataen
+  _nextKonfigId = 1;
+  data.configs.forEach(entry => {
+    const id = _nextKonfigId++;
+    _konfigList.push(_deserializeConfigEntry(entry, id));
+  });
+  return _konfigList[0].id;
+}
+
+// commitActiveConfig er samme mekanisme som konfigSaveCurrent — gitt eget
+// navn her fordi det er dette steget arkitekturen forutsetter skjer FØR
+// enhver serialisering (lagre/dele/eksportere).
+function commitActiveConfig(){ konfigSaveCurrent(); }
+
+async function saveProject(){
+  const project = serializeProject();
+  const id = await sbSaveConfig('PRJ', project); // gjenbruker samme Supabase-tabell/kolonner
+  return id; // 'PRJ-XXXXXX'
+}
+
+async function loadProject(fullId){
+  const result = await sbLoadConfig(fullId); // { prefix, state }
+  return result.state;
+}
+
+async function createShareLink(){
+  const id = await saveProject();
+  const url = new URL(window.location.href);
+  url.search = '?config=' + id;
+  url.hash = '';
+  return { id, url: url.toString() };
+}
+
+// Åpner et lastet payload (nytt prosjekt-format ELLER ett av de gamle
+// formatene) og viser konfiguratoren. Én funksjon for både URL-autolast
+// og manuell ID-innliming — ingen egne stier per format lenger.
+function _openLoadedPayload(data){
+  if(!data) throw new Error('Tom konfigurasjon');
+  let project;
+  if(data.schemaVersion && Array.isArray(data.configs)){
+    project = data; // allerede nytt format
+  } else if(data._multiMode && Array.isArray(data.configs)){
+    // Legacy MLT-format. MERK (funnet ved test mot ekte produksjonsdata i
+    // Supabase): eksisterende MLT-rader har reposRailExcluded/
+    // flightRailExcluded/sketchRailExcluded lagret som korrupt '{}' (gammel
+    // Set→JSON-bug), IKKE som array eller fravær. Må derfor bruke
+    // _toArraySafe() her — en naiv "||[]"-fallback trigger ikke på et
+    // truthy {}, og [...{}] kaster TypeError (ikke-iterérbart).
+    project = { schemaVersion:1, configs: data.configs.map(c => c.mode==='stair'
+      ? { mode:'stair', label:c.label, state:{
+          S:{ ...c.snapS, reposRailExcluded:_toArraySafe(c.snapS.reposRailExcluded), flightRailExcluded:_toArraySafe(c.snapS.flightRailExcluded) },
+          REPOS:{ ...c.snapREPOS } } }
+      : { mode:'walk', label:c.label, state:{ W:{ ...c.snapW, sketchRailExcluded:_toArraySafe(c.snapW.sketchRailExcluded) }, walkSegs:{segs:[],nextId:1} } }
+    )};
+  } else if(data._mode==='stair'){
+    // Legacy enkelt-trapp (TRP-XXXX). Samme funn: _repos.reposRailExcluded
+    // er normalt en ekte array (den ble alltid eksplisitt serialisert riktig
+    // av den gamle koden), men vær defensiv uansett.
+    const repos = data._repos || {};
+    project = { schemaVersion:1, configs:[{ mode:'stair', label:'Trapp 1', state:{
+      S:{ ...data, reposRailExcluded: _toArraySafe(repos.reposRailExcluded), flightRailExcluded: _toArraySafe(data._flightRailExcluded) },
+      REPOS: repos
+    }}]};
+  } else if(data._mode==='walk'){
+    // Legacy enkelt-gangbane (GBN-XXXX)
+    project = { schemaVersion:1, configs:[{ mode:'walk', label:'Gangbane 1', state:{ W:{ ...data }, walkSegs:{segs:[],nextId:1} } }] };
+  } else {
+    throw new Error('Ukjent konfigurasjonstype');
+  }
+  const firstId = deserializeProject(project);
+  // Vis konfiguratoren (samme oppgaver som startMode() gjør for welcome-screen)
+  const ws = document.getElementById('welcome-screen'); if(ws) ws.style.display = 'none';
+  ['konfig-tab-bar','view-toggle','walk-toolbar'].forEach(elId=>{ const el=document.getElementById(elId); if(el) el.style.removeProperty('display'); });
+  const tek = document.getElementById('tek-panel'); if(tek) tek.style.removeProperty('display');
+  konfigSwitch(firstId);
+  return project.configs.length;
+}
+
+// Én felles inngang for enhver limt-inn ID — kort delt-prosjekt-ID
+// (PRJ-XXXXXX, og bakoverkompatibelt: TRP-/GBN-/MLT-XXXX fra Supabase)
+// ELLER en lang selvstendig base64-ID (gammelt e-post-format).
+async function _loadAnyShareId(raw){
+  raw = (raw||'').trim();
+  if(!raw) throw new Error('Tom ID');
+  if(raw.split('-').length <= 2){
+    const data = await loadProject(raw);
+    return _openLoadedPayload(data);
+  }
+  const decoded = decodeConfigId(raw);
+  if(!decoded) throw new Error('Ugyldig ID-format');
+  return _openLoadedPayload(decoded);
+}
+
+// Sjekker ?config=... i URL-en ved oppstart og laster delt prosjekt automatisk.
+// Feiler dette (utgått/finnes ikke/Supabase nede), forblir konfiguratoren i
+// normal, brukbar tilstand — ingen halvveis-ødelagt state.
+async function loadProjectFromUrl(){
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('config');
+  if(!id) return false;
+  try{
+    showToast('Henter delt prosjekt…');
+    const n = await _loadAnyShareId(id);
+    showToast('✓ Delt prosjekt lastet ('+n+' konfigurasjon'+(n===1?'':'er')+')');
+  }catch(e){
+    console.error('Kunne ikke laste delt prosjekt fra URL:', e);
+    showToast('❌ Fant ikke delt prosjekt: ' + e.message);
+  }
+  return true;
 }
 async function sendStair(){
   const name=document.getElementById('sf-name').value.trim(), email=document.getElementById('sf-email').value.trim();
@@ -5214,7 +5307,7 @@ function toggleTekPanel(){
 
 // Hjelpefunksjoner for deep-copy av state
 function snapS()  { return {...S,  reposRailExcluded: new Set(S.reposRailExcluded), flightRailExcluded: new Set(S.flightRailExcluded) }; }
-function snapW()  { return {...W}; }
+function snapW()  { return {...W,  sketchRailExcluded: new Set(W.sketchRailExcluded||[]) }; }
 function snapREPOS(){ return {...REPOS}; }
 
 function applySnapS(snap) {
@@ -5222,7 +5315,10 @@ function applySnapS(snap) {
   S.reposRailExcluded = new Set(snap.reposRailExcluded);
   S.flightRailExcluded = new Set(snap.flightRailExcluded);
 }
-function applySnapW(snap) { Object.assign(W, snap); }
+function applySnapW(snap) {
+  Object.assign(W, snap);
+  W.sketchRailExcluded = new Set(snap.sketchRailExcluded||[]);
+}
 function applySnapREPOS(snap) { Object.assign(REPOS, snap); }
 
 // Synkroniser alle DOM-sliders/checkboxes fra nåværende S/W/REPOS
@@ -5327,30 +5423,70 @@ function _makeLabel(mode) {
   return 'Gangbane ' + walkCount;
 }
 
+// ── Fresh default state factories (ÉN autoritativ kilde for defaults) ──
+// Bygger på _DEFAULT_S/_DEFAULT_W/_DEFAULT_REPOS (øyeblikksbilde tatt rett
+// ved S/W/REPOS-deklarasjonen, se over) i stedet for en egen hardkodet kopi
+// av feltlisten. Nye felter lagt til i S/W/REPOS-literalene plukkes dermed
+// automatisk opp her — ingen fare for at denne drifter ut av sync slik den
+// gamle, frittstående "freshS"-hardkodingen i konfigAdd gjorde (den manglet
+// bl.a. S.nManual).
+function _freshStairS(){
+  return { ..._DEFAULT_S, reposRailExcluded: new Set(), flightRailExcluded: new Set() };
+}
+function _freshWalkW(){
+  return { ..._DEFAULT_W, sketchRailExcluded: new Set() };
+}
+function _freshREPOS(){
+  // breddeMm/dybdeMm settes bevisst til default trappbredde (ikke 0) — en
+  // fersk config starter riktignok alltid som type:'straight' (REPOS er da
+  // ubrukt), men gir man den et repos-type senere skal ikke bredden starte
+  // på 0. Dette var slik det opprinnelige (hardkodede) konfigAdd også gjorde.
+  return { ..._DEFAULT_REPOS, breddeMm: _DEFAULT_S.widthMm, dybdeMm: _DEFAULT_S.widthMm };
+}
+
+// ── Per-config WalkSegs (frihånds gangbane-seksjoner) ──
+// BUG (fikset): WalkSegs/walkSegNextId var tidligere globale og IKKE en del
+// av konfigurasjonens snapshot. Ved bytte mellom to gangbane-konfigurasjoner
+// "lekket" derfor seksjonene fra forrige konfig inn i den nye — det gamle
+// switchMode._skipReset-hacket eksisterte nettopp for å unngå at dette ble
+// nullstilt, uten å faktisk gjenopprette riktige seksjoner per konfig.
+// Nå lagres/gjenopprettes WalkSegs eksplisitt sammen med resten av state.
+function _snapWalkSegs(){ return { segs: WalkSegs.map(s=>({...s})), nextId: walkSegNextId }; }
+function _applyWalkSegs(snap){
+  WalkSegs.length = 0;
+  (snap && snap.segs || []).forEach(s=>WalkSegs.push({...s}));
+  walkSegNextId = (snap && snap.nextId) || 1;
+}
+
 function konfigSaveCurrent() {
   const k = _konfigList.find(k=>k.id===_activeKonfigId);
   if(!k) return;
   k.snapS = snapS();
   k.snapW = snapW();
   k.snapREPOS = snapREPOS();
+  if(k.mode==='walk') k.walkSegs = _snapWalkSegs();
 }
 
 function konfigSwitch(id) {
-  // Save current state to active snapshot
+  // Commit runtime state (S/W/REPOS/WalkSegs) into the config we're leaving
   konfigSaveCurrent();
-  // Load new snapshot
+  // Load target config's own isolated state
   const k = _konfigList.find(k=>k.id===id);
   if(!k) return;
   _activeKonfigId = id;
   applySnapS(k.snapS);
   applySnapW(k.snapW);
   applySnapREPOS(k.snapREPOS);
+  _applyWalkSegs(k.mode==='walk' ? k.walkSegs : null);
+  if(k.mode==='walk') _applySketchFromW(); // synk 2D-sketch-canvas (SK.points/closed) + panelsynlighet fra target-configens W
   // Clear material cache — new config may have different surface
   clearMatCache();
-  // Switch mode panels (skipReset=true so WalkSegs are preserved)
-  switchMode._skipReset = true;
-  switchMode(k.mode);
-  switchMode._skipReset = false;
+  // Kaller _applyModePanels (LAVNIVÅ) direkte — IKKE switchMode() (HØYNIVÅ).
+  // Riktig S/W/REPOS/WalkSegs for k er allerede lastet inn over; å gå via
+  // switchMode() her ville rutet tilbake inn i konfig-systemet og enten
+  // vært en meningsløs no-op (target er jo allerede aktiv) eller i verste
+  // fall trigget en ny, uønsket konfigAdd().
+  _applyModePanels(k.mode);
   syncDOMFromState(k.mode);
   // Rebuild 3D
   if(k.mode==='stair') buildStair();
@@ -5361,21 +5497,13 @@ function konfigSwitch(id) {
 function konfigAdd(mode) {
   konfigSaveCurrent();
   const id = _nextKonfigId++;
-  const defaultLabel = _makeLabel(mode);
-  const label = defaultLabel;
-  // New config gets fresh default state
-  const freshS = {
-    heightCm:240, widthMm:900, angleDeg:35,
-    f2independent:false, height2Cm:200, angle2Deg:35,
-    type:'straight', mat:'alu-raw',
-    handrail:true, riser:true, tek17:false, rail:'spiler', reposRail:true,
-    reposRailExcluded: new Set(), flightRailExcluded: new Set()
-  };
-  const freshW = {length:6, height:100, span:200, bearing:'self', wallmount:false,
-    widthCm:120, usage:'industry', grating:'open', mat:'alu-raw',
-    railType:'topp', whand:true, wtoe:false};
-  const freshREPOS = {breddeMm:900, dybdeMm:900, f2offsetMm:0, f1xMm:0, f2zMm:0, f1x180Mm:0};
-  _konfigList.push({id, mode, label, snapS:freshS, snapW:freshW, snapREPOS:freshREPOS});
+  const label = _makeLabel(mode);
+  // New config gets fresh, fully isolated default state
+  _konfigList.push({
+    id, mode, label,
+    snapS: _freshStairS(), snapW: _freshWalkW(), snapREPOS: _freshREPOS(),
+    walkSegs: mode==='walk' ? { segs:[], nextId:1 } : null
+  });
   konfigSwitch(id);
   setTimeout(()=>showToast('✓ '+(mode==='stair'?'Trapp':'Gangbane')+' lagt til'), 100);
 }
@@ -5383,11 +5511,16 @@ function konfigAdd(mode) {
 function konfigRemove(id) {
   if(_konfigList.length<=1){ showToast('Du må ha minst én konfigurasjon.'); return; }
   const idx = _konfigList.findIndex(k=>k.id===id);
+  if(idx<0) return;
+  const wasActive = (id === _activeKonfigId);
   _konfigList.splice(idx,1);
-  // Switch to nearest remaining
   const next = _konfigList[Math.min(idx, _konfigList.length-1)];
-  _activeKonfigId = null; // force fresh switch
-  konfigSwitch(next.id);
+  if(wasActive){
+    _activeKonfigId = null; // force a full (non-committing) switch — the removed config's state must not be saved
+    konfigSwitch(next.id);
+  } else {
+    renderKonfigTabs(); // removed config wasn't active — active runtime state is untouched
+  }
 }
 
 function konfigPromptAdd() {
@@ -5456,10 +5589,14 @@ function initMultiKonfig() {
     label: firstMode==='stair'?'Trapp 1':'Gangbane 1',
     snapS: snapS(),
     snapW: snapW(),
-    snapREPOS: snapREPOS()
+    snapREPOS: snapREPOS(),
+    walkSegs: firstMode==='walk' ? _snapWalkSegs() : null
   });
   _activeKonfigId = id;
   renderKonfigTabs();
+  // If the URL contains a shared project (?config=PRJ-XXXXXX or a legacy ID),
+  // load it now — this replaces the default single config created above.
+  loadProjectFromUrl();
 }
 
 
@@ -6358,10 +6495,27 @@ const _SB_URL  = 'https://hdfilgkrcmvvwfmtxdsm.supabase.co';
 const _SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkZmlsZ2tyY212dndmbXR4ZHNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyODIxNDYsImV4cCI6MjA5Mjg1ODE0Nn0.B_amf1jIXpZM1a5uom0QGL2kWUWgNurrn2gjos07nJ8';
 const _SB_HDRS = { 'Content-Type':'application/json', 'apikey':_SB_KEY, 'Authorization':'Bearer '+_SB_KEY };
 
+// Tegn uten 0/O/1/I for å unngå forveksling ved manuell avskrift
+const _SHORTID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function _randomShortId(len){
+  len = len || 6;
+  let out = '';
+  const cryptoObj = window.crypto || window.msCrypto;
+  if(cryptoObj && cryptoObj.getRandomValues){
+    const arr = new Uint32Array(len);
+    cryptoObj.getRandomValues(arr);
+    for(let i=0;i<len;i++) out += _SHORTID_CHARS[arr[i] % _SHORTID_CHARS.length];
+  } else {
+    for(let i=0;i<len;i++) out += _SHORTID_CHARS[Math.floor(Math.random()*_SHORTID_CHARS.length)];
+  }
+  return out;
+}
+
 async function sbSaveConfig(prefix, state) {
-  // Generer kort ID: PREFIX-XXXX (4 tegn base36)
-  const hash = JSON.stringify(state).split('').reduce((a,c)=>((a<<5)-a+c.charCodeAt(0))|0, 0);
-  const shortId = Math.abs(hash).toString(36).slice(0,4).toUpperCase().padStart(4,'0');
+  // ID genereres tilfeldig (IKKE hash av innhold — en hash-basert ID kunne
+  // kollidere mellom to helt ulike prosjekter med samme 4-tegns hash og
+  // dermed laste feil data. Tilfeldig 6-tegns ID gjør kollisjon ekstremt usannsynlig).
+  const shortId = _randomShortId(6);
   const fullId  = prefix + '-' + shortId;
 
   // Sett utløpsdato 90 dager frem
@@ -6397,7 +6551,7 @@ async function sbLoadConfig(fullId) {
   const shortId = parts[1];
 
   const res = await fetch(
-    _SB_URL + '/rest/v1/configurations?prefix=eq.' + prefix + '&short_id=eq.' + shortId + '&order=created_at.desc&limit=1',
+    _SB_URL + '/rest/v1/configurations?prefix=eq.' + encodeURIComponent(prefix) + '&short_id=eq.' + encodeURIComponent(shortId) + '&order=created_at.desc&limit=1',
     { headers: _SB_HDRS }
   );
   if (!res.ok) throw new Error('Supabase feil: ' + res.status);
@@ -6513,81 +6667,31 @@ function _applyDarkScene(isDark) {
 
 
 // ── Deling ──────────────────────────────────────────────────
-function _buildMultiPayload() {
-  // Lagre aktiv konfig først
-  konfigSaveCurrent();
-  const payload = _konfigList.map(k => ({
-    mode: k.mode, label: k.label,
-    snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
-    snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
-  }));
-  // Sjekk om gjeldende modus ikke er representert i listen
-  // Eks: bruker er i gangbane-modus men alle konfigurasjoner er trapper
-  const hasCurrentMode = _konfigList.find(k => k.id === _activeKonfigId);
-  if (hasCurrentMode && currentMode !== hasCurrentMode.mode) {
-    // Aktiv konfig har feil modus — legg til gjeldende som ekstra
-    const extraLabel = currentMode === 'walk' ? 'Gangbane '+ (_konfigList.filter(k=>k.mode==='walk').length+1)
-                                               : 'Trapp '+ (_konfigList.filter(k=>k.mode==='stair').length+1);
-    payload.push({
-      mode: currentMode,
-      label: extraLabel,
-      snapS: snapS(),
-      snapW: snapW(),
-      snapREPOS: snapREPOS()
-    });
-  }
-  return payload;
-}
-
-async function shareConfigStair() {
+// Deling bygges nå rundt HELE prosjektet (alle konfigurasjoner i _konfigList),
+// aldri bare den aktive konfigurasjonen — se createShareLink()/saveProject().
+// Trapp- og gangbane-knappene gjør derfor nøyaktig det samme.
+async function _shareCurrentProject(shareIdElId, shareWrapElId) {
   try {
-    showToast('Genererer ID…');
-    let id;
-    if (_konfigList.length > 1 || currentMode !== (_konfigList[0]&&_konfigList[0].mode)) {
-      const payload = _buildMultiPayload();
-      if (payload.length > 1) {
-        id = await sbSaveConfig('MLT', { _multiMode: true, configs: payload });
-      } else {
-        const state = {...S, _repos:{...REPOS, reposRailExcluded:[...S.reposRailExcluded]}, _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
-        id = await sbSaveConfig('TRP', state);
-      }
-    } else {
-      const state = {...S, _repos:{...REPOS, reposRailExcluded:[...S.reposRailExcluded]}, _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
-      id = await sbSaveConfig('TRP', state);
-    }
-    document.getElementById('s-share-id').textContent = id;
-    document.getElementById('s-share-wrap').style.display = '';
-    showToast('🔗 ID klar: ' + id);
+    showToast('Genererer delelink…');
+    const { url } = await createShareLink();
+    const el = document.getElementById(shareIdElId);
+    el.textContent = url;
+    el.style.wordBreak = 'break-all';
+    el.dataset.full = url;
+    document.getElementById(shareWrapElId).style.display = '';
+    showToast('🔗 Delelink klar!');
   } catch(e) { showToast('❌ ' + e.message); }
 }
-
-async function shareConfigWalk() {
-  try {
-    showToast('Genererer ID…');
-    let id;
-    if (_konfigList.length > 1 || currentMode !== (_konfigList[0]&&_konfigList[0].mode)) {
-      const payload = _buildMultiPayload();
-      if (payload.length > 1) {
-        id = await sbSaveConfig('MLT', { _multiMode: true, configs: payload });
-      } else {
-        id = await sbSaveConfig('GBN', {...W, _mode:'walk'});
-      }
-    } else {
-      id = await sbSaveConfig('GBN', {...W, _mode:'walk'});
-    }
-    document.getElementById('w-share-id').textContent = id;
-    document.getElementById('w-share-wrap').style.display = '';
-    showToast('🔗 ID klar: ' + id);
-  } catch(e) { showToast('❌ ' + e.message); }
-}
+async function shareConfigStair() { await _shareCurrentProject('s-share-id', 's-share-wrap'); }
+async function shareConfigWalk()  { await _shareCurrentProject('w-share-id', 'w-share-wrap'); }
 
 function copyShareId(mode) {
   const el = document.getElementById(mode === 's' ? 's-share-id' : 'w-share-id');
-  const id = el ? el.textContent.trim() : '';
-  if (!id || id === '—') return;
-  navigator.clipboard.writeText(id)
-    .then(() => showToast('📋 Kopiert: ' + id))
-    .catch(() => prompt('Kopier ID:', id));
+  const url = el ? (el.dataset.full || el.textContent.trim()) : '';
+  if (!url || url === '—') return;
+  navigator.clipboard.writeText(url)
+    .then(() => showToast('📋 Lenke kopiert!'))
+    .catch(() => prompt('Kopier lenke:', url));
 }
 
 // ── Excel med passord ────────────────────────────────────────
@@ -6612,24 +6716,39 @@ function requireExcelLogin() {
 // ── GLB Eksport ─────────────────────────────────────────────
 async function exportGLB() {
   if (!THREE.GLTFExporter) { showToast('⚠ GLTFExporter ikke lastet'); return; }
-  
+
   // Samle alle konfigurasjoner
-  konfigSaveCurrent();
+  commitActiveConfig();
   const configs = _konfigList.length > 0 ? _konfigList : null;
-  
+
   if (!configs || configs.length === 0) {
     showToast('⚠ Ingen konfigurasjoner å eksportere'); return;
   }
 
+  // Husk hvilken config som faktisk er aktiv FØR eksport starter, slik at vi
+  // deterministisk kan gjenopprette den etterpå — se _restoreAfterExport().
+  // BUG (fikset): tidligere ble ikke dette gjort i det hele tatt. exportGLB
+  // bygde midlertidig hver config sin geometri rett inn i det globale
+  // S/W/REPOS/WalkSegs (nødvendig — 3D-bygget leser fra disse globalene),
+  // men gjenopprettet ALDRI opprinnelig state etterpå. Etter en flerkonfig-
+  // ZIP-eksport sto derfor appen igjen og viste — og hadde S/W/REPOS/
+  // currentMode satt til — den SISTE eksporterte configen, mens
+  // konfigurasjonsfanen fortsatt viste den opprinnelig aktive som "aktiv"
+  // (_activeKonfigId var urørt) → UI og faktisk runtime-state var ikke
+  // lenger i samsvar.
+  const _exportActiveId = _activeKonfigId;
+  function _restoreAfterExport(){ konfigSwitch(_exportActiveId); }
+
   showToast('Genererer GLB' + (configs.length > 1 ? '-filer…' : '…'));
 
   const exporter = new THREE.GLTFExporter();
-  
+
   if (configs.length === 1) {
     // Én konfigurasjon — eksporter direkte
     _exportSingleConfig(exporter, configs[0], config => {
       _downloadBlob(config.blob, config.name + '.glb');
       showToast('✓ ' + config.name + '.glb lastet ned');
+      _restoreAfterExport();
     });
   } else {
     // Flere — pakk i ZIP
@@ -6643,6 +6762,7 @@ async function exportGLB() {
           zip.generateAsync({ type: 'blob' }).then(zipBlob => {
             _downloadBlob(zipBlob, 'Normeka-konfigurasjoner.zip');
             showToast('✓ ' + done + ' GLB-filer lastet ned som ZIP');
+            _restoreAfterExport();
           });
         }
       });
@@ -6651,24 +6771,29 @@ async function exportGLB() {
 }
 
 function _exportSingleConfig(exporter, konfig, callback) {
-  // Bygg scene for denne konfigurasjonen
+  // Bygg scene for denne konfigurasjonen — bruker de samme lavnivå,
+  // Set-trygge apply-funksjonene som konfigSwitch() (ikke de eldre
+  // applyStairState/applyWalkState, som verken satte REPOS eller WalkSegs
+  // og dermed ga FEIL 3D-geometri for enhver repos-trapp (r90/r180) eller
+  // flerseksjons-gangbane som ikke var den aktive configen ved eksport-
+  // tidspunktet — geometrien ble da bygget med det som tilfeldigvis lå i
+  // de globale REPOS/WalkSegs fra den faktisk aktive configen).
+  // MERK: dette mutrerer midlertidig de globale S/W/REPOS/WalkSegs/
+  // currentMode — se exportGLB()/_restoreAfterExport() som garantert
+  // gjenoppretter opprinnelig aktiv config etter at ALLE eksporter er ferdig.
   const tempScene = new THREE.Scene();
-  const S_orig = konfig.snapS;
-  const W_orig = konfig.snapW;
-  const R_orig = konfig.snapREPOS;
-
-  // Lagre nåværende state
-  const savedS = JSON.parse(JSON.stringify({...S, reposRailExcluded:[...S.reposRailExcluded], flightRailExcluded:[...S.flightRailExcluded]}));
-  const savedMode = currentMode;
-
-  // Applyn konfig-state midlertidig
   const isStair = konfig.mode === 'stair';
-  
+
   if (isStair) {
-    applyStairState(S_orig);
+    applySnapS(konfig.snapS);
+    applySnapREPOS(konfig.snapREPOS);
+    _applyWalkSegs(null);
+    currentMode = 'stair';
     buildStair();
   } else {
-    applyWalkState(W_orig);
+    applySnapW(konfig.snapW);
+    _applyWalkSegs(konfig.walkSegs);
+    currentMode = 'walk';
     buildWalk();
   }
 
