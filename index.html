@@ -1440,7 +1440,6 @@ const _DEFAULT_W = { ...W };
 const _DEFAULT_REPOS = { ...REPOS };
 
 // ── Multi-konfig state (must be before startup calls) ──
-let _nextKonfigId = 1;
 const _konfigList = [];
 let _activeKonfigId = null;
 
@@ -3580,11 +3579,30 @@ function generateMultiConfigId(){
 //      og to ulike payload-formater (rå S/W for enkeltkonfig vs snap*-array for multi)
 const PROJECT_SCHEMA_VERSION = 1;
 
+// ── Individuell, stabil config-ID (TRP-XXXXXX / GBN-XXXXXX) ──────────
+// Skilt fra tre andre ID-begreper i appen som IKKE må blandes sammen:
+//   1) PRJ-XXXXXX (createShareLink/saveProject) — identifiserer hele
+//      PROSJEKTET i Supabase, brukes i ?config=-URL-en.
+//   2) TRP-CHK-<base64>/GBN-CHK-<base64> (generateConfigId/decodeConfigId)
+//      — det eldre, urørte, selvstendige e-post-ID-systemet. Uendret.
+//   3) Et helt FERSKT TRP-/GBN-/MLT-XXXX generert av sbSaveConfig() hver
+//      gang "forespørsel"-kurven sendes (sendForesp, lenger ned) — dette
+//      er en e-post-spesifikk snapshot-ID, ikke config-ens identitet.
+// Denne (#4) er config-ens EGEN, stabile identitet inni _konfigList/det
+// serialiserte prosjektet — satt én gang ved opprettelse og uforandret
+// gjennom konfigSwitch/lagring/deling/lasting. Den lagres IKKE som egen
+// Supabase-rad og kan IKKE limes inn i "Last inn konfigurasjon"-boksen —
+// den identifiserer konfigurasjonen KUN inni prosjektet den tilhører.
+function _generateConfigId(mode){
+  return (mode==='stair' ? 'TRP' : 'GBN') + '-' + _randomShortId(6);
+}
+
 function serializeProject(){
   commitActiveConfig();
   return {
     schemaVersion: PROJECT_SCHEMA_VERSION,
     configs: _konfigList.map(k => ({
+      id: k.id,
       mode: k.mode,
       label: k.label,
       state: k.mode==='stair'
@@ -3610,18 +3628,25 @@ function migrateProject(data){
 // JSON.stringify (Set-er serialiseres ikke automatisk — se historikk over).
 function _toArraySafe(v){ return Array.isArray(v) ? v : []; }
 
-function _deserializeConfigEntry(entry, id){
+// MERK: tar IKKE lenger imot en id utenfra. entry.id (persistert stabil
+// config-ID) brukes hvis den finnes; ellers (gammelt delt prosjekt fra FØR
+// denne funksjonen fantes, eller legacy TRP/GBN/MLT-format uten id-felt)
+// genereres en fersk, stabil ID her — bedre enn å late som en gjenbrukt
+// sekvensiell counter var en ekte identitet.
+function _deserializeConfigEntry(entry){
   if(entry.mode==='stair'){
     const s = (entry.state && entry.state.S) || {};
     const snapS = { ..._freshStairS(), ...s,
       reposRailExcluded: new Set(_toArraySafe(s.reposRailExcluded)),
       flightRailExcluded: new Set(_toArraySafe(s.flightRailExcluded)) };
     const snapREPOS = { ..._freshREPOS(), ...((entry.state && entry.state.REPOS) || {}) };
+    const id = entry.id || _generateConfigId('stair');
     return { id, mode:'stair', label: entry.label || 'Trapp', snapS, snapW: _freshWalkW(), snapREPOS, walkSegs:null };
   }
   const w = (entry.state && entry.state.W) || {};
   const snapW = { ..._freshWalkW(), ...w, sketchRailExcluded: new Set(_toArraySafe(w.sketchRailExcluded)) };
   const ws = (entry.state && entry.state.walkSegs) || {segs:[],nextId:1};
+  const id = entry.id || _generateConfigId('walk');
   return { id, mode:'walk', label: entry.label || 'Gangbane', snapS: _freshStairS(), snapW, snapREPOS: _freshREPOS(),
     walkSegs: { segs: _toArraySafe(ws.segs).map(s=>({...s})), nextId: ws.nextId||1 } };
 }
@@ -3633,10 +3658,8 @@ function deserializeProject(raw){
   if(!data || !Array.isArray(data.configs) || !data.configs.length) throw new Error('Tomt eller ugyldig prosjekt');
   _konfigList.length = 0;
   _activeKonfigId = null; // viktig: ingen aktiv config → konfigSwitch under vil IKKE committe noe over den nyinnlastede dataen
-  _nextKonfigId = 1;
   data.configs.forEach(entry => {
-    const id = _nextKonfigId++;
-    _konfigList.push(_deserializeConfigEntry(entry, id));
+    _konfigList.push(_deserializeConfigEntry(entry));
   });
   return _konfigList[0].id;
 }
@@ -3702,11 +3725,16 @@ function _openLoadedPayload(data){
     throw new Error('Ukjent konfigurasjonstype');
   }
   const firstId = deserializeProject(project);
+  // Valgfri dyplenke til én spesifikk config i prosjektet: ?config=PRJ-X&active=TRP-Y.
+  // Sekundær bekvemmelighet — faller stille tilbake til første config (firstId)
+  // hvis "active" mangler eller ikke finnes i det lastede prosjektet.
+  const activeParam = new URLSearchParams(window.location.search).get('active');
+  const targetId = (activeParam && _konfigList.some(k=>k.id===activeParam)) ? activeParam : firstId;
   // Vis konfiguratoren (samme oppgaver som startMode() gjør for welcome-screen)
   const ws = document.getElementById('welcome-screen'); if(ws) ws.style.display = 'none';
   ['konfig-tab-bar','view-toggle','walk-toolbar'].forEach(elId=>{ const el=document.getElementById(elId); if(el) el.style.removeProperty('display'); });
   const tek = document.getElementById('tek-panel'); if(tek) tek.style.removeProperty('display');
-  konfigSwitch(firstId);
+  konfigSwitch(targetId);
   return project.configs.length;
 }
 
@@ -5496,7 +5524,7 @@ function konfigSwitch(id) {
 
 function konfigAdd(mode) {
   konfigSaveCurrent();
-  const id = _nextKonfigId++;
+  const id = _generateConfigId(mode);
   const label = _makeLabel(mode);
   // New config gets fresh, fully isolated default state
   _konfigList.push({
@@ -5563,11 +5591,11 @@ function renderKonfigTabs() {
     const icon = k.mode==='stair'?'🪜':'🚶';
     tab.innerHTML = icon+' '+k.label+
       (_konfigList.length>1
-        ? ' <span class="ktab-close" onclick="event.stopPropagation();konfigRemove('+k.id+')" title="Fjern">✕</span>'
+        ? ' <span class="ktab-close" onclick="event.stopPropagation();konfigRemove(\''+k.id+'\')" title="Fjern">✕</span>'
         : '');
     tab.onclick = ()=>konfigSwitch(k.id);
     tab.ondblclick = (e)=>{ e.stopPropagation(); konfigRename(k.id); };
-    tab.title = 'Klikk for å bytte · Dobbeltklikk for å gi nytt navn';
+    tab.title = 'Klikk for å bytte · Dobbeltklikk for å gi nytt navn · ID: '+k.id;
     bar.appendChild(tab);
   });
   const addBtn = document.createElement('button');
@@ -5582,7 +5610,7 @@ function renderKonfigTabs() {
 // ── Init: wrap existing first config ──────────────────
 function initMultiKonfig() {
   const firstMode = currentMode || 'stair';
-  const id = _nextKonfigId++;
+  const id = _generateConfigId(firstMode);
   _konfigList.push({
     id,
     mode: firstMode,
@@ -6958,8 +6986,8 @@ function checkGearLogin() {
 
 function leggTilIForesp() {
   // Lag en ny kopi av gjeldende konfig og legg den i forespørselen
-  const id = _nextKonfigId++;
   const mode = currentMode;
+  const id = _generateConfigId(mode);
   const label = _makeLabel(mode);
   const newK = {
     id, mode, label,
@@ -7023,12 +7051,12 @@ function renderForespListe() {
       <input value="${k.label}" style="flex:1;border:none;background:transparent;font-family:inherit;
              font-size:.85rem;color:var(--text);outline:none;cursor:pointer;"
              onfocus="this.style.background='var(--surface2)';this.style.borderRadius='5px';this.style.padding='2px 5px';"
-             onblur="this.style.background='transparent';this.style.padding='0';_forespRename(${k.id},this.value);"
+             onblur="this.style.background='transparent';this.style.padding='0';_forespRename('${k.id}',this.value);"
              onkeydown="if(event.key==='Enter')this.blur();">
-      <button onclick="_forespSwitch(${k.id})"
+      <button onclick="_forespSwitch('${k.id}')"
         style="padding:.2rem .5rem;background:none;border:1px solid var(--border);border-radius:5px;
                font-size:.7rem;cursor:pointer;color:var(--muted);">Vis</button>
-      <button onclick="_forespRemove(${k.id})"
+      <button onclick="_forespRemove('${k.id}')"
         style="padding:.2rem .45rem;background:none;border:1px solid #e0b0b0;border-radius:5px;
                font-size:.75rem;cursor:pointer;color:#c0392b;">✕</button>`;
     list.appendChild(row);
