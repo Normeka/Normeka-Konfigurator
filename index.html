@@ -3708,13 +3708,37 @@ async function saveProject(){
   return id; // 'PRJ-XXXXXX'
 }
 
+// Lagrer DEN ENE configen på nøyaktig samme måte som sendStair()/sendWalk()
+// gjør for e-postens "Konfigurasjon-ID" (samme prefix, samme rå state-form,
+// samme stabile short-id via _stableShortId(k.id)) — i stedet for å pakke
+// den inn i et eget PRJ-prosjekt-omslag. Brukes kun når prosjektet har
+// nøyaktig én config, slik at delekoden og mail-koden for den samme
+// konfigurasjonen alltid blir identiske, slik det var før PRJ-systemet.
+// Fungerer sammen med den EKSISTERENDE legacy-lasteren i _openLoadedPayload
+// (data._mode==='stair'/'walk') — ingen egen lastesti nødvendig.
+async function _saveSingleConfigLikeMail(){
+  const k = _konfigList[0];
+  if(k.mode==='stair'){
+    const state = { ...k.snapS,
+      _repos: { ...k.snapREPOS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])] },
+      _flightRailExcluded: [...(k.snapS.flightRailExcluded||[])],
+      _mode: 'stair' };
+    return await sbSaveConfig('TRP', state, _stableShortId(k.id));
+  }
+  const state = { ...k.snapW, _mode: 'walk' };
+  return await sbSaveConfig('GBN', state, _stableShortId(k.id));
+}
+
 async function loadProject(fullId){
   const result = await sbLoadConfig(fullId); // { prefix, state }
   return result.state;
 }
 
 async function createShareLink(){
-  const id = await saveProject();
+  commitActiveConfig();
+  const id = _konfigList.length === 1
+    ? await _saveSingleConfigLikeMail()
+    : await saveProject();
   const url = new URL(window.location.href);
   url.search = '?config=' + id;
   url.hash = '';
