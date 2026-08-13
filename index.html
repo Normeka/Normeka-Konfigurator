@@ -1439,6 +1439,18 @@ const _DEFAULT_S = { ...S };
 const _DEFAULT_W = { ...W };
 const _DEFAULT_REPOS = { ...REPOS };
 
+// BUG (fikset): stod tidligere nede ved Supabase-delingskoden (langt senere
+// i filen). _generateConfigId()/_randomShortId() kalles derimot allerede
+// under selve oppstart-bootstrappen (initMultiKonfig() → konfigAdd/første
+// config), FØR scriptet i det hele tatt hadde kjørt frem til den gamle
+// plasseringen. Siden dette er en const, var den i sin "temporal dead
+// zone" på det tidspunktet — ga "Cannot access '_SHORTID_CHARS' before
+// initialization" og krasjet HELE resten av inline-scriptet, inkludert
+// IIFE-en lenger ned som fjerner last-skjermen. Derfor ble last-skjermen
+// stående for alltid. Flyttet hit — garantert initialisert før noe kaller
+// _randomShortId().
+const _SHORTID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // uten 0/O/1/I for å unngå forveksling ved manuell avskrift
+
 // ── Multi-konfig state (must be before startup calls) ──
 const _konfigList = [];
 let _activeKonfigId = null;
@@ -6524,7 +6536,6 @@ const _SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const _SB_HDRS = { 'Content-Type':'application/json', 'apikey':_SB_KEY, 'Authorization':'Bearer '+_SB_KEY };
 
 // Tegn uten 0/O/1/I for å unngå forveksling ved manuell avskrift
-const _SHORTID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function _randomShortId(len){
   len = len || 6;
   let out = '';
