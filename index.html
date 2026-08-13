@@ -1450,6 +1450,16 @@ const _DEFAULT_REPOS = { ...REPOS };
 // _randomShortId().
 const _SHORTID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // uten 0/O/1/I for å unngå forveksling ved manuell avskrift
 
+// Samme årsak/samme fiks som over: sbLoadConfig()/sbSaveConfig() kalles
+// allerede under selve oppstart-bootstrappen (via initMultiKonfig() →
+// loadProjectFromUrl() når en ?config=-lenke åpnes), lenge før scriptet
+// ville nådd der disse tidligere sto deklarert. Flyttet hit av nøyaktig
+// samme grunn — ga "Cannot access '_SB_URL' before initialization" og
+// stanset resten av inline-scriptet (inkl. det som fjerner last-skjermen).
+const _SB_URL  = 'https://hdfilgkrcmvvwfmtxdsm.supabase.co';
+const _SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkZmlsZ2tyY212dndmbXR4ZHNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyODIxNDYsImV4cCI6MjA5Mjg1ODE0Nn0.B_amf1jIXpZM1a5uom0QGL2kWUWgNurrn2gjos07nJ8';
+const _SB_HDRS = { 'Content-Type':'application/json', 'apikey':_SB_KEY, 'Authorization':'Bearer '+_SB_KEY };
+
 // ── Multi-konfig state (must be before startup calls) ──
 const _konfigList = [];
 let _activeKonfigId = null;
@@ -3603,9 +3613,21 @@ const PROJECT_SCHEMA_VERSION = 1;
 // serialiserte prosjektet — satt én gang ved opprettelse og uforandret
 // gjennom konfigSwitch/lagring/deling/lasting. Den lagres IKKE som egen
 // Supabase-rad og kan IKKE limes inn i "Last inn konfigurasjon"-boksen —
-// den identifiserer konfigurasjonen KUN inni prosjektet den tilhører.
+// den identifiserer konfigurasjonen KUN inni prosjektet den tilhører...
+// MED ÉTT UNNTAK: når en config faktisk sendes på e-post (sendStair/
+// sendWalk), lagres den DA i Supabase under nøyaktig denne samme ID-en
+// (se _stableShortId() og sbSaveConfig sitt explicitShortId-parameter),
+// og blir dermed limbar/lastbar akkurat som andre TRP-/GBN-ID-er.
 function _generateConfigId(mode){
   return (mode==='stair' ? 'TRP' : 'GBN') + '-' + _randomShortId(6);
+}
+
+// Henter ut den tilfeldige delen ("MJHJQZ") av en stabil config-ID
+// ("TRP-MJHJQZ"), slik at sbSaveConfig kan lagre UNDER samme ID i stedet
+// for å dikte opp en helt ny og urelatert én — se sendStair()/sendWalk().
+function _stableShortId(configId){
+  const parts = (configId||'').split('-');
+  return parts.length>=2 ? parts[1] : null;
 }
 
 function serializeProject(){
@@ -3793,11 +3815,15 @@ async function sendStair(){
   const actualAngle=Math.round(Math.atan2((S.heightCm/100)/n, P.TRINN_W)*180/Math.PI*10)/10;
   const tl={straight:'Rettløp',r90r:'Repos 90° høyre',r90l:'Repos 90° venstre',r180:'Repos 180°'};
   const railLabels2={spiler:'Spilerekkverk (95mm åpning, 35mm spiler)',knelist:'Kun knelist (50mm × 5mm)',open:'Uten rekkverk'};
-  // Lagre i Supabase og bruk kort ID
+  // Lagre i Supabase UNDER SAMME ID som konfigurasjonen allerede har
+  // (_activeKonfigId, satt av konfigSaveCurrent() over) — slik at "Del
+  // konfigurasjon" og e-postens "Konfigurasjon-ID" alltid blir identiske
+  // for samme konfigurasjon, i stedet for at hvert e-post-utsendelse
+  // genererte en helt ny, urelatert kort-ID.
   const _stairState = {...S, _repos:{...REPOS, reposRailExcluded:[...S.reposRailExcluded]}, _flightRailExcluded:[...S.flightRailExcluded], _mode:'stair'};
   let configId = generateConfigId('TRP', _stairState); // fallback
   try {
-    const shortId = await sbSaveConfig('TRP', _stairState);
+    const shortId = await sbSaveConfig('TRP', _stairState, _stableShortId(_activeKonfigId));
     configId = shortId;
   } catch(e) { console.warn('Supabase lagring feilet, bruker lokal ID', e); }
 
@@ -3916,9 +3942,12 @@ async function sendWalk(){
   const bearingLabel=W.bearing==='posts'?'Med søyler ('+W.span+' cm c-c)':'Selvbærende';
   const wallStr = W.wallmount ? ' + Veggmontert' : '';
   const _walkState = {...W, _mode:'walk'};
+  // Se samme begrunnelse som i sendStair(): lagre under configens egen
+  // stabile ID (_activeKonfigId) slik at "Del konfigurasjon" og
+  // e-postens "Konfigurasjon-ID" alltid blir identiske.
   let configId = generateConfigId('GBN', _walkState);
   try {
-    const shortId = await sbSaveConfig('GBN', _walkState);
+    const shortId = await sbSaveConfig('GBN', _walkState, _stableShortId(_activeKonfigId));
     configId = shortId;
   } catch(e) { console.warn('Supabase lagring feilet', e); }
   const GBWe = (W.widthCm||120)/100;
@@ -5534,6 +5563,15 @@ function konfigSwitch(id) {
 }
 
 function konfigAdd(mode) {
+  // Sperre mot dobbel-utløsning (rapportert bug: to identiske configs ble
+  // lagt til fra én "legg til"-handling — mest sannsynlig et raskt
+  // dobbelttrykk/touch+click-duplisering i nettleseren, siden ingen
+  // duplisert kall til konfigAdd ble funnet i selve koden). Blokkerer
+  // ethvert gjentatt kall i et kort tidsvindu, uavhengig av årsak.
+  const _now = Date.now();
+  if (konfigAdd._lastCall && (_now - konfigAdd._lastCall) < 500) return;
+  konfigAdd._lastCall = _now;
+
   konfigSaveCurrent();
   const id = _generateConfigId(mode);
   const label = _makeLabel(mode);
@@ -6529,10 +6567,11 @@ document.getElementById('cv').addEventListener('wheel', () => {
 }, {passive: true});
 
 // ── Hjem-knapp (logo) ─────────────────────────────────────
-// ── Supabase konfigurasjonsdeling ───────────────────
-const _SB_URL  = 'https://hdfilgkrcmvvwfmtxdsm.supabase.co';
-const _SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkZmlsZ2tyY212dndmbXR4ZHNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyODIxNDYsImV4cCI6MjA5Mjg1ODE0Nn0.B_amf1jIXpZM1a5uom0QGL2kWUWgNurrn2gjos07nJ8';
-const _SB_HDRS = { 'Content-Type':'application/json', 'apikey':_SB_KEY, 'Authorization':'Bearer '+_SB_KEY };
+// (Supabase-konstantene _SB_URL/_SB_KEY/_SB_HDRS stod tidligere her — flyttet
+// helt til toppen av scriptet, se forklaring der. Samme årsak som
+// _SHORTID_CHARS-bugen: sbLoadConfig() kalles allerede under selve
+// oppstart-bootstrappen via loadProjectFromUrl() når en ?config=-lenke
+// åpnes, lenge før scriptet ville nådd denne linjen.)
 
 // Tegn uten 0/O/1/I for å unngå forveksling ved manuell avskrift
 function _randomShortId(len){
@@ -6549,11 +6588,20 @@ function _randomShortId(len){
   return out;
 }
 
-async function sbSaveConfig(prefix, state) {
-  // ID genereres tilfeldig (IKKE hash av innhold — en hash-basert ID kunne
-  // kollidere mellom to helt ulike prosjekter med samme 4-tegns hash og
-  // dermed laste feil data. Tilfeldig 6-tegns ID gjør kollisjon ekstremt usannsynlig).
-  const shortId = _randomShortId(6);
+async function sbSaveConfig(prefix, state, explicitShortId) {
+  // ID genereres tilfeldig som hovedregel (IKKE hash av innhold — en hash-
+  // basert ID kunne kollidere mellom to helt ulike prosjekter med samme
+  // 4-tegns hash og dermed laste feil data. Tilfeldig 6-tegns ID gjør
+  // kollisjon ekstremt usannsynlig).
+  //
+  // explicitShortId (valgfri): brukes når kallet skal lagre EN SPESIFIKK,
+  // allerede-stabil config-ID (f.eks. k.id = "TRP-MJHJQZ" → shortId
+  // "MJHJQZ") i stedet for å dikte opp en ny. Dette er det som gjør at
+  // "Del konfigurasjon" og e-postens "Konfigurasjon-ID" nå alltid blir
+  // identiske for samme konfigurasjon — se sendStair()/sendWalk() lenger
+  // ned, som sender inn configens egen k.id her i stedet for å la
+  // sbSaveConfig dikte opp en helt ny, urelatert ID hver gang man sender.
+  const shortId = explicitShortId || _randomShortId(6);
   const fullId  = prefix + '-' + shortId;
 
   // Sett utløpsdato 90 dager frem
@@ -7156,7 +7204,10 @@ async function sendForesp() {
       const state  = k.mode === 'stair'
         ? {...k.snapS, _repos:{...k.snapREPOS}, _mode:'stair'}
         : {...k.snapW, _mode:'walk'};
-      shareId = await sbSaveConfig(prefix, state);
+      // Samme prinsipp som sendStair/sendWalk: lagre under configens egen
+      // stabile ID (k.id), ikke en ny tilfeldig én, slik at koden i mailen
+      // stemmer overens med configens faktiske identitet.
+      shareId = await sbSaveConfig(prefix, state, _stableShortId(k.id));
     } else {
       const payload = items.map(k => ({
         mode: k.mode, label: k.label,
