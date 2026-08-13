@@ -2845,6 +2845,7 @@ document.getElementById('s-r2').addEventListener('input',function(){
 document.querySelectorAll('[data-st]').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('[data-st]').forEach(x=>x.classList.remove('tbs'));
   b.classList.add('tbs'); S.type=b.dataset.st;
+  _refreshActiveStairLabelForTypeChange();
   const isRepos = S.type!=='straight';
   document.getElementById('f2-section').style.display    = isRepos?'block':'none';
   document.getElementById('repos-section').style.display = isRepos?'block':'none';
@@ -3657,6 +3658,7 @@ function serializeProject(){
       id: k.id,
       mode: k.mode,
       label: k.label,
+      labelIsCustom: !!k.labelIsCustom, // se _deserializeConfigEntry — samme mønster som _iForesp
       _iForesp: !!k._iForesp, // alltid false her siden vi allerede filtrerte — se _deserializeConfigEntry for hvorfor feltet likevel tas med eksplisitt
       state: k.mode==='stair'
         ? { S: { ...k.snapS,
@@ -3681,15 +3683,14 @@ function migrateProject(data){
 // JSON.stringify (Set-er serialiseres ikke automatisk — se historikk over).
 function _toArraySafe(v){ return Array.isArray(v) ? v : []; }
 
-// MERK: tar IKKE lenger imot en id utenfra. entry.id (persistert stabil
-// config-ID) brukes hvis den finnes; ellers (gammelt delt prosjekt fra FØR
-// denne funksjonen fantes, eller legacy TRP/GBN/MLT-format uten id-felt)
-// genereres en fersk, stabil ID her — bedre enn å late som en gjenbrukt
-// sekvensiell counter var en ekte identitet.
-// _iForesp gjenopprettes eksplisitt som boolean (audit-funn H-ny-2) — et
-// manglende felt (legacy-data, eller data fra FØR dette feltet fantes)
-// blir bevisst `false`, aldri `undefined`, slik at senere kode alltid kan
-// stole på typen uten en ekstra !!-konvertering hver gang.
+// _iForesp/labelIsCustom gjenopprettes eksplisitt som boolean (samme mønster
+// som audit-funn H-ny-2) — et manglende felt (legacy-data, eller data fra
+// FØR disse feltene fantes) blir bevisst `false`, aldri `undefined`, slik at
+// senere kode alltid kan stole på typen uten en ekstra !!-konvertering hver
+// gang. For labelIsCustom betyr `false` for legacy-data at et eventuelt
+// egendefinert navn fra FØR denne funksjonen fantes vil bli behandlet som
+// automatisk (kan i prinsippet overskrives ved en senere typeendring) —
+// uunngåelig siden det ikke finnes noe historisk signal å skille på.
 function _deserializeConfigEntry(entry){
   if(entry.mode==='stair'){
     const s = (entry.state && entry.state.S) || {};
@@ -3698,13 +3699,13 @@ function _deserializeConfigEntry(entry){
       flightRailExcluded: new Set(_toArraySafe(s.flightRailExcluded)) };
     const snapREPOS = { ..._freshREPOS(), ...((entry.state && entry.state.REPOS) || {}) };
     const id = entry.id || _generateConfigId('stair');
-    return { id, mode:'stair', label: entry.label || 'Trapp', snapS, snapW: _freshWalkW(), snapREPOS, walkSegs:null, _iForesp: !!entry._iForesp };
+    return { id, mode:'stair', label: entry.label || 'Trapp', labelIsCustom: !!entry.labelIsCustom, snapS, snapW: _freshWalkW(), snapREPOS, walkSegs:null, _iForesp: !!entry._iForesp };
   }
   const w = (entry.state && entry.state.W) || {};
   const snapW = { ..._freshWalkW(), ...w, sketchRailExcluded: new Set(_toArraySafe(w.sketchRailExcluded)) };
   const ws = (entry.state && entry.state.walkSegs) || {segs:[],nextId:1};
   const id = entry.id || _generateConfigId('walk');
-  return { id, mode:'walk', label: entry.label || 'Gangbane', snapS: _freshStairS(), snapW, snapREPOS: _freshREPOS(),
+  return { id, mode:'walk', label: entry.label || 'Gangbane', labelIsCustom: !!entry.labelIsCustom, snapS: _freshStairS(), snapW, snapREPOS: _freshREPOS(),
     walkSegs: { segs: _toArraySafe(ws.segs).map(s=>({...s})), nextId: ws.nextId||1 }, _iForesp: !!entry._iForesp };
 }
 
@@ -5577,20 +5578,48 @@ function syncDOMFromState(mode) {
 // Init on load — must be after all declarations
 // initMultiKonfig called from startup below
 
+// Delt navnetabell for automatisk trapp-etikett — brukt av BÅDE _makeLabel()
+// (ved opprettelse) og _refreshActiveStairLabelForTypeChange() (ved
+// typeendring på en eksisterende config), slik at de to aldri kan drifte
+// fra hverandre (kun ETT sted å oppdatere hvis en ny trapptype legges til).
+function _stairTypeName(type){
+  const typeMap = {
+    'straight': 'Rettløp',
+    'r90r':     'Repos 90° høyre',
+    'r90l':     'Repos 90° venstre',
+    'r180':     'Repos 180°'
+  };
+  return typeMap[type] || 'Trapp';
+}
 function _makeLabel(mode) {
   const stairCount = _konfigList.filter(k=>k.mode==='stair').length + (mode==='stair'?1:0);
   const walkCount  = _konfigList.filter(k=>k.mode==='walk').length  + (mode==='walk' ?1:0);
   if(mode === 'stair') {
-    const typeMap = {
-      'straight': 'Rettløp',
-      'r90r':     'Repos 90° høyre',
-      'r90l':     'Repos 90° venstre',
-      'r180':     'Repos 180°'
-    };
-    const typeName = typeMap[S.type] || 'Trapp';
-    return typeName + ' ' + stairCount;
+    return _stairTypeName(S.type) + ' ' + stairCount;
   }
   return 'Gangbane ' + walkCount;
+}
+
+// Henter ut tallet på slutten av et automatisk generert navn ("Rettløp 2" →
+// "2"). Brukes for å BEHOLDE eksisterende confignummer ved typeendring —
+// telling på nytt (slik _makeLabel gjør ved opprettelse) ville gitt feil
+// tall her, siden configen allerede ligger i _konfigList og andre configer
+// kan ha blitt lagt til/fjernet siden den opprinnelig ble opprettet.
+function _labelTrailingNumber(label){
+  const m = /(\d+)\s*$/.exec(label || '');
+  return m ? m[1] : '1';
+}
+
+// Oppdaterer AKTIV trapp-configs automatiske navn til å matche ny type —
+// KUN dersom navnet fortsatt er automatisk generert (k.labelIsCustom er
+// false/udefinert). Har brukeren selv gitt configen et navn (via
+// konfigRename/_forespRename, som setter labelIsCustom=true), røres det
+// aldri av en typeendring.
+function _refreshActiveStairLabelForTypeChange(){
+  const k = _konfigList.find(k=>k.id===_activeKonfigId);
+  if(!k || k.mode!=='stair' || k.labelIsCustom) return;
+  k.label = _stairTypeName(S.type) + ' ' + _labelTrailingNumber(k.label);
+  renderKonfigTabs();
 }
 
 // ── Fresh default state factories (ÉN autoritativ kilde for defaults) ──
@@ -5679,7 +5708,7 @@ function konfigAdd(mode) {
   const label = _makeLabel(mode);
   // New config gets fresh, fully isolated default state
   _konfigList.push({
-    id, mode, label,
+    id, mode, label, labelIsCustom: false,
     snapS: _freshStairS(), snapW: _freshWalkW(), snapREPOS: _freshREPOS(),
     walkSegs: mode==='walk' ? { segs:[], nextId:1 } : null
   });
@@ -5737,6 +5766,7 @@ function konfigRename(id){
   const newName = prompt('Gi konfigurasjon nytt navn:', k.label);
   if(newName && newName.trim()){
     k.label = newName.trim();
+    k.labelIsCustom = true; // manuelt navn — skal aldri overskrives automatisk av en senere typeendring
     renderKonfigTabs();
   }
 }
@@ -5778,7 +5808,14 @@ function initMultiKonfig() {
   _konfigList.push({
     id,
     mode: firstMode,
-    label: firstMode==='stair'?'Trapp 1':'Gangbane 1',
+    // Bruker _makeLabel() (samme som konfigAdd) i stedet for et hardkodet
+    // "Trapp 1" — sikrer at bootstrap-configen starter med et navn som
+    // faktisk er konsistent med resten av det automatiske navnesystemet
+    // fra første sekund (S.type er 'straight' her, så dette blir "Rettløp
+    // 1"), i stedet for at det først heter "Trapp 1" og så plutselig
+    // hopper til f.eks. "Repos 90° venstre 1" ved aller første typeendring.
+    label: _makeLabel(firstMode),
+    labelIsCustom: false,
     snapS: snapS(),
     snapW: snapW(),
     snapREPOS: snapREPOS(),
@@ -7182,7 +7219,7 @@ function leggTilIForesp() {
   // forespørselskopi av en gangbane med flere seksjoner mistet dem
   // stille dersom kopien senere ble byttet til via _forespSwitch().
   const newK = {
-    id, mode, label,
+    id, mode, label, labelIsCustom: false,
     snapS: snapS(),
     snapW: snapW(),
     snapREPOS: snapREPOS(),
@@ -7258,7 +7295,7 @@ function renderForespListe() {
 
 function _forespRename(id, newLabel) {
   const k = _konfigList.find(k => k.id === id);
-  if(k && newLabel.trim()) k.label = newLabel.trim();
+  if(k && newLabel.trim()){ k.label = newLabel.trim(); k.labelIsCustom = true; }
   renderKonfigTabs();
 }
 
