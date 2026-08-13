@@ -6782,14 +6782,14 @@ function _applyDarkScene(isDark) {
 // Trapp- og gangbane-knappene gjør derfor nøyaktig det samme.
 async function _shareCurrentProject(shareIdElId, shareWrapElId) {
   try {
-    showToast('Genererer delelink…');
-    const { url } = await createShareLink();
+    showToast('Genererer ID…');
+    const { id } = await createShareLink();
     const el = document.getElementById(shareIdElId);
-    el.textContent = url;
+    el.textContent = id;
     el.style.wordBreak = 'break-all';
-    el.dataset.full = url;
+    el.dataset.full = id;
     document.getElementById(shareWrapElId).style.display = '';
-    showToast('🔗 Delelink klar!');
+    showToast('🔗 ID klar: ' + id);
   } catch(e) { showToast('❌ ' + e.message); }
 }
 async function shareConfigStair() { await _shareCurrentProject('s-share-id', 's-share-wrap'); }
@@ -6797,11 +6797,11 @@ async function shareConfigWalk()  { await _shareCurrentProject('w-share-id', 'w-
 
 function copyShareId(mode) {
   const el = document.getElementById(mode === 's' ? 's-share-id' : 'w-share-id');
-  const url = el ? (el.dataset.full || el.textContent.trim()) : '';
-  if (!url || url === '—') return;
-  navigator.clipboard.writeText(url)
-    .then(() => showToast('📋 Lenke kopiert!'))
-    .catch(() => prompt('Kopier lenke:', url));
+  const id = el ? (el.dataset.full || el.textContent.trim()) : '';
+  if (!id || id === '—') return;
+  navigator.clipboard.writeText(id)
+    .then(() => showToast('📋 Kopiert: ' + id))
+    .catch(() => prompt('Kopier ID:', id));
 }
 
 // ── Excel med passord ────────────────────────────────────────
