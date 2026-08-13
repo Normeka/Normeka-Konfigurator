@@ -2749,7 +2749,10 @@ function switchMode(m){
   if(typeof _konfigList==='undefined' || !_konfigList.length){ _applyModePanels(m); return; } // tidlig oppstart, før initMultiKonfig()
   const active = _konfigList.find(k=>k.id===_activeKonfigId);
   if(active && active.mode===m) return; // riktig config er allerede aktiv — ingenting å gjøre
-  const existing = _konfigList.find(k=>k.mode===m);
+  // Kun ekte configs — en forespørselskopi med riktig modus skal ALDRI
+  // kunne bli funnet og gjort aktiv her (audit-funn H-ny-1: samme
+  // invariant-brudd-mønster som i konfigRemove).
+  const existing = _getRealConfigs().find(k=>k.mode===m);
   if(existing) konfigSwitch(existing.id);
   else konfigAdd(m);
 }
@@ -3630,14 +3633,31 @@ function _stableShortId(configId){
   return parts.length>=2 ? parts[1] : null;
 }
 
+// _getRealConfigs() — SENTRAL definisjon av "faktiske brukerconfigs"
+// (audit-funn H-ny-1). _konfigList inneholder BÅDE ekte konfigurasjoner
+// OG snapshots lagt til i forespørselslisten (k._iForesp === true) — de
+// to har alltid delt samme array, men er konseptuelt forskjellige ting.
+// Alt som bestemmer single-vs-multi (dele/e-post) eller bygger et
+// delbart prosjekt MÅ bruke denne — aldri _konfigList direkte — ellers
+// teller forespørselskopier feilaktig som en ekstra "konfigurasjon".
+function _getRealConfigs(){
+  return _konfigList.filter(k => !k._iForesp);
+}
+
 function serializeProject(){
   commitActiveConfig();
   return {
     schemaVersion: PROJECT_SCHEMA_VERSION,
-    configs: _konfigList.map(k => ({
+    // Kun ekte configs — forespørselskopier skal ALDRI havne i et delt
+    // PRJ-prosjekt (audit-funn H-ny-1). Siden dette er det ENE stedet
+    // et prosjekt bygges for lagring/deling, gjelder dette automatisk
+    // for både saveProject() (multi) og alt annet som senere måtte
+    // kalle serializeProject().
+    configs: _getRealConfigs().map(k => ({
       id: k.id,
       mode: k.mode,
       label: k.label,
+      _iForesp: !!k._iForesp, // alltid false her siden vi allerede filtrerte — se _deserializeConfigEntry for hvorfor feltet likevel tas med eksplisitt
       state: k.mode==='stair'
         ? { S: { ...k.snapS,
               reposRailExcluded: [...(k.snapS.reposRailExcluded||[])],
@@ -3666,6 +3686,10 @@ function _toArraySafe(v){ return Array.isArray(v) ? v : []; }
 // denne funksjonen fantes, eller legacy TRP/GBN/MLT-format uten id-felt)
 // genereres en fersk, stabil ID her — bedre enn å late som en gjenbrukt
 // sekvensiell counter var en ekte identitet.
+// _iForesp gjenopprettes eksplisitt som boolean (audit-funn H-ny-2) — et
+// manglende felt (legacy-data, eller data fra FØR dette feltet fantes)
+// blir bevisst `false`, aldri `undefined`, slik at senere kode alltid kan
+// stole på typen uten en ekstra !!-konvertering hver gang.
 function _deserializeConfigEntry(entry){
   if(entry.mode==='stair'){
     const s = (entry.state && entry.state.S) || {};
@@ -3674,14 +3698,14 @@ function _deserializeConfigEntry(entry){
       flightRailExcluded: new Set(_toArraySafe(s.flightRailExcluded)) };
     const snapREPOS = { ..._freshREPOS(), ...((entry.state && entry.state.REPOS) || {}) };
     const id = entry.id || _generateConfigId('stair');
-    return { id, mode:'stair', label: entry.label || 'Trapp', snapS, snapW: _freshWalkW(), snapREPOS, walkSegs:null };
+    return { id, mode:'stair', label: entry.label || 'Trapp', snapS, snapW: _freshWalkW(), snapREPOS, walkSegs:null, _iForesp: !!entry._iForesp };
   }
   const w = (entry.state && entry.state.W) || {};
   const snapW = { ..._freshWalkW(), ...w, sketchRailExcluded: new Set(_toArraySafe(w.sketchRailExcluded)) };
   const ws = (entry.state && entry.state.walkSegs) || {segs:[],nextId:1};
   const id = entry.id || _generateConfigId('walk');
   return { id, mode:'walk', label: entry.label || 'Gangbane', snapS: _freshStairS(), snapW, snapREPOS: _freshREPOS(),
-    walkSegs: { segs: _toArraySafe(ws.segs).map(s=>({...s})), nextId: ws.nextId||1 } };
+    walkSegs: { segs: _toArraySafe(ws.segs).map(s=>({...s})), nextId: ws.nextId||1 }, _iForesp: !!entry._iForesp };
 }
 
 // Erstatter HELE det gjeldende prosjektet (kontrollert — ingen gamle configs
@@ -3708,16 +3732,18 @@ async function saveProject(){
   return id; // 'PRJ-XXXXXX'
 }
 
-// Lagrer DEN ENE configen på nøyaktig samme måte som sendStair()/sendWalk()
-// gjør for e-postens "Konfigurasjon-ID" (samme prefix, samme rå state-form,
-// samme stabile short-id via _stableShortId(k.id)) — i stedet for å pakke
-// den inn i et eget PRJ-prosjekt-omslag. Brukes kun når prosjektet har
-// nøyaktig én config, slik at delekoden og mail-koden for den samme
-// konfigurasjonen alltid blir identiske, slik det var før PRJ-systemet.
+// Lagrer DEN ENE (ekte) configen på nøyaktig samme måte som sendStair()/
+// sendWalk() gjør for e-postens "Konfigurasjon-ID" (samme prefix, samme rå
+// state-form, samme stabile short-id via _stableShortId(k.id)) — i stedet
+// for å pakke den inn i et eget PRJ-prosjekt-omslag. Brukes kun når
+// prosjektet har nøyaktig én EKTE config (_getRealConfigs, ikke rå
+// _konfigList — audit-funn H-ny-1: en forespørselskopi i tillegg skal
+// ikke tvinge dette over i multi-config-sporet), slik at delekoden og
+// mail-koden for den samme konfigurasjonen alltid blir identiske.
 // Fungerer sammen med den EKSISTERENDE legacy-lasteren i _openLoadedPayload
 // (data._mode==='stair'/'walk') — ingen egen lastesti nødvendig.
 async function _saveSingleConfigLikeMail(){
-  const k = _konfigList[0];
+  const k = _getRealConfigs()[0];
   if(k.mode==='stair'){
     const state = { ...k.snapS,
       _repos: { ...k.snapREPOS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])] },
@@ -3736,7 +3762,10 @@ async function loadProject(fullId){
 
 async function createShareLink(){
   commitActiveConfig();
-  const id = _konfigList.length === 1
+  // _getRealConfigs() — IKKE _konfigList — avgjør single vs. multi
+  // (audit-funn H-ny-1: en forespørselskopi skal aldri kunne trigge
+  // multi-config-sporet eller havne med i en enkelt-config-deling).
+  const id = _getRealConfigs().length === 1
     ? await _saveSingleConfigLikeMail()
     : await saveProject();
   const url = new URL(window.location.href);
@@ -3748,11 +3777,16 @@ async function createShareLink(){
 // Åpner et lastet payload (nytt prosjekt-format ELLER ett av de gamle
 // formatene) og viser konfiguratoren. Én funksjon for både URL-autolast
 // og manuell ID-innliming — ingen egne stier per format lenger.
-function _openLoadedPayload(data){
+// sourceId (valgfri): den korte ID-en (f.eks. "TRP-A1B2C3") som faktisk ble
+// brukt til å hente denne dataen — kun satt av _loadAnyShareId() for korte
+// Supabase-ID-er, ALDRI for de lange selvstendige base64-e-post-ID-ene
+// (de har ingen tilsvarende kort, stabil identitet å bevare). Brukes til å
+// bevare configens ID gjennom legacy enkelt-config-lasting (audit-funn C3).
+function _openLoadedPayload(data, sourceId){
   if(!data) throw new Error('Tom konfigurasjon');
   let project;
   if(data.schemaVersion && Array.isArray(data.configs)){
-    project = data; // allerede nytt format
+    project = data; // allerede nytt format — configs[].id er allerede persistert riktig
   } else if(data._multiMode && Array.isArray(data.configs)){
     // Legacy MLT-format. MERK (funnet ved test mot ekte produksjonsdata i
     // Supabase): eksisterende MLT-rader har reposRailExcluded/
@@ -3760,6 +3794,9 @@ function _openLoadedPayload(data){
     // Set→JSON-bug), IKKE som array eller fravær. Må derfor bruke
     // _toArraySafe() her — en naiv "||[]"-fallback trigger ikke på et
     // truthy {}, og [...{}] kaster TypeError (ikke-iterérbart).
+    // MLT har aldri hatt stabile per-config-ID-er (feltet fantes ikke da
+    // formatet ble laget), så sourceId brukes bevisst ikke her — hver
+    // sub-config får (som før) en fersk stabil ID ved deserialisering.
     project = { schemaVersion:1, configs: data.configs.map(c => c.mode==='stair'
       ? { mode:'stair', label:c.label, state:{
           S:{ ...c.snapS, reposRailExcluded:_toArraySafe(c.snapS.reposRailExcluded), flightRailExcluded:_toArraySafe(c.snapS.flightRailExcluded) },
@@ -3770,14 +3807,18 @@ function _openLoadedPayload(data){
     // Legacy enkelt-trapp (TRP-XXXX). Samme funn: _repos.reposRailExcluded
     // er normalt en ekte array (den ble alltid eksplisitt serialisert riktig
     // av den gamle koden), men vær defensiv uansett.
+    // sourceId settes som config-ens id (audit-funn C3, fikset): før ble
+    // denne ALDRI satt her, så enhver lasting av en TRP-XXXX-delelenke ga
+    // configen en helt ny, tilfeldig ID — ustabil identitet gjennom en
+    // last→del-runde, stikk i strid med hele poenget med stabile config-IDer.
     const repos = data._repos || {};
-    project = { schemaVersion:1, configs:[{ mode:'stair', label:'Trapp 1', state:{
+    project = { schemaVersion:1, configs:[{ id: sourceId, mode:'stair', label:'Trapp 1', state:{
       S:{ ...data, reposRailExcluded: _toArraySafe(repos.reposRailExcluded), flightRailExcluded: _toArraySafe(data._flightRailExcluded) },
       REPOS: repos
     }}]};
   } else if(data._mode==='walk'){
-    // Legacy enkelt-gangbane (GBN-XXXX)
-    project = { schemaVersion:1, configs:[{ mode:'walk', label:'Gangbane 1', state:{ W:{ ...data }, walkSegs:{segs:[],nextId:1} } }] };
+    // Legacy enkelt-gangbane (GBN-XXXX) — samme fiks som stair-grenen over.
+    project = { schemaVersion:1, configs:[{ id: sourceId, mode:'walk', label:'Gangbane 1', state:{ W:{ ...data }, walkSegs:{segs:[],nextId:1} } }] };
   } else {
     throw new Error('Ukjent konfigurasjonstype');
   }
@@ -3803,7 +3844,10 @@ async function _loadAnyShareId(raw){
   if(!raw) throw new Error('Tom ID');
   if(raw.split('-').length <= 2){
     const data = await loadProject(raw);
-    return _openLoadedPayload(data);
+    // Samme normalisering som sbLoadConfig() bruker internt for oppslag —
+    // sikrer at config.id blir identisk med den kanoniske formen (store
+    // bokstaver) uavhengig av hvordan brukeren skrev/limte inn ID-en.
+    return _openLoadedPayload(data, raw.toUpperCase());
   }
   const decoded = decodeConfigId(raw);
   if(!decoded) throw new Error('Ugyldig ID-format');
@@ -3908,7 +3952,7 @@ async function sendStair(){
     'TEK17-STATUS',
     'Opptrinn: '+opp+'mm '+(opp<=220?'✓':'✗ (maks 220mm)'),
     'Formel 2×opp+inn: '+(2*opp+Math.round(P.TRINN_W*1000))+'mm '+((2*opp+Math.round(P.TRINN_W*1000))>=600&&(2*opp+Math.round(P.TRINN_W*1000))<=640?'✓':'✗ (krav 600–640mm)'),'',
-    ...(_konfigList.length===1 ? [...generateStairCutList(n, opp, actualAngle),''] : []),
+    ...(_getRealConfigs().length===1 ? [...generateStairCutList(n, opp, actualAngle),''] : []),
     'KUNDE',
     'Navn: '+name,
     'Firma: '+(document.getElementById('sf-co').value||'—')+' (org.nr. '+(document.getElementById('sf-orgnr').value||'—')+')',
@@ -3917,34 +3961,59 @@ async function sendStair(){
     'Kommentar: '+(document.getElementById('sf-msg').value||'—'),'',
     'Konfigurasjon-ID: '+configId
   ].join('\n');
-  // Legg til andre konfigurasjoner i e-posten
-  if(_konfigList.length > 1) {
+  // Legg til andre konfigurasjoner i e-posten — kun ekte configs
+  // (audit-funn H-ny-1: en forespørselskopi skal aldri telles med eller
+  // listes opp her, siden den ikke er en konfigurasjon brukeren ba om å
+  // sende — den ligger kun til side i forespørselskurven).
+  const _realForMail = _getRealConfigs();
+  if(_realForMail.length > 1) {
     body += '\n\n' + '═'.repeat(40);
-    body += '\n TOTALT ' + _konfigList.length + ' KONFIGURASJONER I DENNE FORESPØRSELEN';
+    body += '\n TOTALT ' + _realForMail.length + ' KONFIGURASJONER I DENNE FORESPØRSELEN';
     body += '\n' + '═'.repeat(40);
-    _konfigList.forEach((k,idx) => {
+    _realForMail.forEach((k,idx) => {
       const label = (k.id===_activeKonfigId?'★ ':'') + (idx+1)+'. '+k.label+' ('+k.mode+')';
       body += '\n' + label;
     });
     body += '\n\nSe konfigurasjon-IDer over for å laste opp hver enkelt.';
   }
-  const subjCount = _konfigList.length>1 ? ' ('+_konfigList.length+' konfigurasjoner)' : '';
-  // Generate multi-ID if multiple configs
-  if(_konfigList.length > 1){
-    // Lagre multi-konfig til Supabase for kort ID
+  const subjCount = _realForMail.length>1 ? ' ('+_realForMail.length+' konfigurasjoner)' : '';
+  // displayId: dette er ID-en som faktisk vises til brukeren, settes i
+  // dataset.full, kopieres til utklippstavlen og vises i bekreftelses-
+  // toasten. Deklarert her i funksjonens YTRE scope — ikke inni en
+  // .then()-callback slik den var før (se audit-funn C1: koden refererte
+  // "displayId" rett etter if/else-blokken, der den aldri var deklarert i
+  // det hele tatt for enkelt-config-grenen, og — for multi-config-grenen —
+  // ble referert synkront FØR sbSaveConfig()-løftet i det hele tatt hadde
+  // fått sjansen til å resolve, siden koden brukte .then() uten å vente).
+  // Starter med configId (riktig for enkelt-config); multi-config-grenen
+  // overskriver den under, ETTER at sbSaveConfig() er ferdig awaitet.
+  let displayId = configId;
+  // Generate multi-ID if multiple REAL configs (audit-funn H-ny-1: en
+  // forespørselskopi ved siden av én ekte config skal IKKE trigge dette).
+  if(_realForMail.length > 1){
+    // Lagre multi-konfig til Supabase for kort ID — kun ekte configs,
+    // aldri forespørselskopier (audit-funn H-ny-1: "skal IKKE bli
+    // inkludert i MLT-share").
     konfigSaveCurrent();
-    const payload = _konfigList.map(k => ({
+    const payload = _realForMail.map(k => ({
       mode: k.mode, label: k.label,
       snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
       snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
     }));
     const multiState = { _multiMode: true, configs: payload };
-    sbSaveConfig('MLT', multiState).then(shortId => {
-      const displayId = shortId || generateMultiConfigId();
-      body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayId);
-      window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon trapp'+subjCount)+'&body='+encodeURIComponent(body);
-      document.getElementById('s-config-id-display').textContent=displayId;
-    });
+    // Fullstendig awaitet nå (var .then() uten venting før — se over).
+    // Feiler Supabase-lagringen, faller vi tilbake til den selvstendige
+    // base64-ID-en i stedet for å la funksjonen krasje eller henge.
+    try {
+      const shortId = await sbSaveConfig('MLT', multiState);
+      displayId = shortId || generateMultiConfigId();
+    } catch(e) {
+      console.warn('Supabase multi-lagring feilet, bruker lokal fallback-ID', e);
+      displayId = generateMultiConfigId();
+    }
+    body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_realForMail.length+' konfigurasjoner):\n'+displayId);
+    window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon trapp'+subjCount)+'&body='+encodeURIComponent(body);
+    document.getElementById('s-config-id-display').textContent=displayId;
   } else {
     window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon trapp'+subjCount)+'&body='+encodeURIComponent(body);
     document.getElementById('s-config-id-display').textContent=configId;
@@ -4000,30 +4069,39 @@ async function sendWalk(){
     'Kommentar: '+(document.getElementById('wf-msg').value||'—'),'',
     'Konfigurasjon-ID: '+configId
   ].filter(l=>l!=='').join('\n');
-  // Legg til andre konfigurasjoner
-  if(_konfigList.length > 1) {
+  // Legg til andre konfigurasjoner — kun ekte configs (audit-funn H-ny-1)
+  const _realForMailW = _getRealConfigs();
+  if(_realForMailW.length > 1) {
     body += '\n\n' + '═'.repeat(40);
-    body += '\n TOTALT ' + _konfigList.length + ' KONFIGURASJONER I DENNE FORESPØRSELEN';
+    body += '\n TOTALT ' + _realForMailW.length + ' KONFIGURASJONER I DENNE FORESPØRSELEN';
     body += '\n' + '═'.repeat(40);
-    _konfigList.forEach((k,idx) => {
+    _realForMailW.forEach((k,idx) => {
       body += '\n'+(idx+1)+'. '+k.label+' ('+k.mode+')';
     });
   }
-  const subjCountW = _konfigList.length>1 ? ' ('+_konfigList.length+' konfigurasjoner)' : '';
-  if(_konfigList.length > 1){
+  const subjCountW = _realForMailW.length>1 ? ' ('+_realForMailW.length+' konfigurasjoner)' : '';
+  // displayIdW: se identisk begrunnelse i sendStair() over — deklarert i
+  // ytre scope, starter som configId, overskrives kun ETTER at
+  // sbSaveConfig() er fullstendig awaitet i multi-config-grenen.
+  let displayIdW = configId;
+  if(_realForMailW.length > 1){
     konfigSaveCurrent();
-    const payloadW = _konfigList.map(k => ({
+    const payloadW = _realForMailW.map(k => ({
       mode: k.mode, label: k.label,
       snapS: { ...k.snapS, reposRailExcluded: [...(k.snapS.reposRailExcluded||[])], flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
       snapW: { ...k.snapW }, snapREPOS: { ...k.snapREPOS }
     }));
     const multiStateW = { _multiMode: true, configs: payloadW };
-    sbSaveConfig('MLT', multiStateW).then(shortId => {
-      const displayIdW = shortId || generateMultiConfigId();
-      body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_konfigList.length+' konfigurasjoner):\n'+displayIdW);
-      window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon gangbane'+subjCountW)+'&body='+encodeURIComponent(body);
-      document.getElementById('w-config-id-display').textContent=displayIdW;
-    });
+    try {
+      const shortId = await sbSaveConfig('MLT', multiStateW);
+      displayIdW = shortId || generateMultiConfigId();
+    } catch(e) {
+      console.warn('Supabase multi-lagring feilet, bruker lokal fallback-ID', e);
+      displayIdW = generateMultiConfigId();
+    }
+    body = body.replace('Konfigurasjon-ID: '+configId, 'Konfigurasjon-ID (alle '+_realForMailW.length+' konfigurasjoner):\n'+displayIdW);
+    window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon gangbane'+subjCountW)+'&body='+encodeURIComponent(body);
+    document.getElementById('w-config-id-display').textContent=displayIdW;
   } else {
     window.location.href='mailto:anders.thoresen@normeka.no?subject='+encodeURIComponent('Konfigurasjon gangbane'+subjCountW)+'&body='+encodeURIComponent(body);
     document.getElementById('w-config-id-display').textContent=configId;
@@ -5610,13 +5688,22 @@ function konfigAdd(mode) {
 }
 
 function konfigRemove(id) {
-  if(_konfigList.length<=1){ showToast('Du må ha minst én konfigurasjon.'); return; }
+  // Kun ekte configs teller for "minst én igjen"-sjekken, og "next" (den
+  // som blir aktiv etterpå) velges KUN blant ekte configs — ellers kunne
+  // "next" i sjeldne tilfeller blitt en forespørselskopi som tilfeldigvis
+  // lå rett etter den fjernede configen i _konfigList sin rekkefølge, og
+  // dermed brutt invarianten "_activeKonfigId peker aldri på en
+  // _iForesp-config" (audit-funn H-ny-1).
+  const realBefore = _getRealConfigs();
+  const idxInReal = realBefore.findIndex(k=>k.id===id);
+  if(idxInReal<0) return; // fantes ikke som en ekte config (evt. en forespørselskopi — fjernes ikke via denne funksjonen)
+  if(realBefore.length<=1){ showToast('Du må ha minst én konfigurasjon.'); return; }
   const idx = _konfigList.findIndex(k=>k.id===id);
-  if(idx<0) return;
   const wasActive = (id === _activeKonfigId);
   _konfigList.splice(idx,1);
-  const next = _konfigList[Math.min(idx, _konfigList.length-1)];
   if(wasActive){
+    const remainingReal = _getRealConfigs();
+    const next = remainingReal[Math.min(idxInReal, remainingReal.length-1)];
     _activeKonfigId = null; // force a full (non-committing) switch — the removed config's state must not be saved
     konfigSwitch(next.id);
   } else {
@@ -5658,12 +5745,16 @@ function renderKonfigTabs() {
   const bar = document.getElementById('konfig-tab-bar');
   if(!bar) return;
   bar.innerHTML = '';
-  _konfigList.forEach(k=>{
+  // Kun ekte configs vises som faner (audit-funn H-ny-1: forespørselskopier
+  // skal ikke vises som en vanlig konfigurasjon i hovedfanelinjen — de har
+  // sin egen, separate liste i forespørsel-nedtrekksmenyen).
+  const realConfigs = _getRealConfigs();
+  realConfigs.forEach(k=>{
     const tab = document.createElement('div');
     tab.className = 'ktab' + (k.id===_activeKonfigId?' kactive':'');
     const icon = k.mode==='stair'?'🪜':'🚶';
     tab.innerHTML = icon+' '+k.label+
-      (_konfigList.length>1
+      (realConfigs.length>1
         ? ' <span class="ktab-close" onclick="event.stopPropagation();konfigRemove(\''+k.id+'\')" title="Fjern">✕</span>'
         : '');
     tab.onclick = ()=>konfigSwitch(k.id);
@@ -7067,19 +7158,39 @@ function checkGearLogin() {
 // ── Forespørsel-system ──────────────────────────────────────
 
 function leggTilIForesp() {
-  // Lag en ny kopi av gjeldende konfig og legg den i forespørselen
+  // Lag en ny, uavhengig snapshot-kopi av gjeldende konfig og legg den i
+  // forespørselen. VIKTIG (audit-funn C2): dette skal ALDRI gjøre
+  // forespørselskopien til den aktive konfigurasjonen. _activeKonfigId
+  // representerer alltid den configen som faktisk vises/redigeres i
+  // runtime (S/W/REPOS/WalkSegs) — en forespørselskopi er en frossen
+  // snapshot til side, ikke noe brukeren hopper over til å redigere.
+  // Tidligere satte denne funksjonen "_activeKonfigId = id;" direkte,
+  // helt utenom konfigSwitch() — det gjorde at etterfølgende redigeringer
+  // (som brukeren trodde gikk til den synlig aktive configen, siden
+  // hverken hovedfanene, 3D-visningen eller sliderne endret seg) i
+  // stedet stille havnet i forespørselskopien ved neste
+  // konfigSaveCurrent()-kall, og den faktiske aktive configen mistet
+  // endringen sporløst.
   const mode = currentMode;
   const id = _generateConfigId(mode);
   const label = _makeLabel(mode);
+  // snapS()/snapW()/snapREPOS() returnerer allerede uavhengige kopier
+  // (egne Set-objekter, egen toppnivå-objekt via spread) — ingen delt
+  // referanse med S/W/REPOS. WalkSegs var derimot ikke fanget opp i det
+  // hele tatt her (i motsetning til konfigAdd/konfigSaveCurrent, som
+  // begge lagrer walkSegs for gangbane-configer) — uten dette ville en
+  // forespørselskopi av en gangbane med flere seksjoner mistet dem
+  // stille dersom kopien senere ble byttet til via _forespSwitch().
   const newK = {
     id, mode, label,
     snapS: snapS(),
     snapW: snapW(),
     snapREPOS: snapREPOS(),
+    walkSegs: mode==='walk' ? _snapWalkSegs() : null,
     _iForesp: true
   };
   _konfigList.push(newK);
-  _activeKonfigId = id;
+  // _activeKonfigId endres bevisst IKKE her — aktiv config forblir aktiv.
 
   // Vis bekreftelse
   const cId = mode === 'stair' ? 's-added-confirm' : 'w-added-confirm';
