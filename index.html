@@ -82,7 +82,7 @@ header{background:var(--nblue);padding:.8rem 1.5rem;display:flex;align-items:cen
 #cv{display:block;width:100%;height:100%;}
 .canvas-hint{position:absolute;top:1rem;right:1rem;font-size:.67rem;color:var(--muted);background:rgba(255,255,255,.85);padding:.28rem .7rem;border-radius:2rem;border:1px solid var(--border);}
 
-.tek-panel{position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.92);border:1.5px solid var(--border);border-radius:8px;padding:.65rem .9rem;font-size:.75rem;min-width:190px;}
+.tek-panel{position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.92);border:1.5px solid var(--border);border-radius:8px;padding:.65rem .9rem;font-size:.75rem;min-width:190px;z-index:11;}
 .tek-title{font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:.45rem;}
 .tek-row{display:flex;justify-content:space-between;gap:.5rem;margin-bottom:3px;}
 .tek-row:last-child{margin-bottom:0;}
@@ -830,7 +830,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
 <div class="app">
   <div class="canvas-wrap">
     <canvas id="cv" style="display:block;width:100%;height:100%;"></canvas>
-    <div id="cv2d-wrap" style="display:none;position:absolute;inset:0;overflow:auto;background:#f8f7f3;">
+    <div id="cv2d-wrap" style="display:none;position:absolute;inset:0;overflow:auto;background:#f8f7f3;z-index:1;">
       <canvas id="cv2d" style="display:block;"></canvas>
     </div>
     <!-- Forespørsel-knapp mobil -->
@@ -2684,8 +2684,20 @@ function setF2zFlush(dir) {
 function startMode(m){
   if(m==='library'){document.getElementById('welcome-screen').style.display='none';libEnter();return;}
   document.getElementById('welcome-screen').style.display='none';
-  // Restore toolbar elements hidden by goHome
-  ['konfig-tab-bar','view-toggle','walk-toolbar'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.removeProperty('display');});
+  // Gjenopprett kun konfig-tab-bar her — IKKE view-toggle/walk-toolbar.
+  // BUG (fikset): disse to deler samme CSS-klasse (.view-toggle{display:
+  // flex}), og et blindt removeProperty('display') på BEGGE — uansett
+  // hvilken modus m faktisk er — gjorde at begge verktøylinjene ble
+  // synlige SAMTIDIG (de ligger også oldi på nøyaktig samme posisjon,
+  // top:7rem;left:1rem). Gangbane-linjas ene "ℹ Mål"-knapp havnet da
+  // rett oppå trapp-linjas "3D"-knapp, og siden switchMode() nedenfor kan
+  // hoppe over selve korrigeringen (_applyModePanels) når riktig config
+  // allerede er aktiv og synlig, ble feilen stående — synlig fra aller
+  // første gang appen åpnes. switchMode(m) → _applyModePanels(m) er alt
+  // som trengs for å sette riktig verktøylinje synlig; view-toggle og
+  // walk-toolbar sitt inline display skal ALDRI røres noe annet sted enn
+  // der (og direkte av goHome() som skjuler dem eksplisitt igjen).
+  const ktb=document.getElementById('konfig-tab-bar');if(ktb)ktb.style.removeProperty('display');
   const tek=document.getElementById('tek-panel');if(tek)tek.style.removeProperty('display');
   switchMode(m);
 }
@@ -2748,7 +2760,15 @@ function switchMode(m){
   if(m==='ma' || m==='library'){ _applyModePanels(m); return; } // MA/bibliotek er egne moduser utenfor konfig-systemet
   if(typeof _konfigList==='undefined' || !_konfigList.length){ _applyModePanels(m); return; } // tidlig oppstart, før initMultiKonfig()
   const active = _konfigList.find(k=>k.id===_activeKonfigId);
-  if(active && active.mode===m) return; // riktig config er allerede aktiv — ingenting å gjøre
+  // "Allerede aktiv" er kun trygt å hoppe over dersom panelet FAKTISK er
+  // synlig. goHome() skjuler #spanel/#wpanel direkte (classList.remove
+  //('visible')), helt utenfor konfig-systemet — uten denne ekstra
+  // sjekken ville et påfølgende startMode('stair') (etter å ha gått
+  // "hjem" og tilbake) sett at riktig config allerede var aktiv, hoppet
+  // over _applyModePanels(), og latt panelet forbli usynlig.
+  const panelEl = document.getElementById(m==='stair' ? 'spanel' : 'wpanel');
+  const alreadyVisible = panelEl && panelEl.classList.contains('visible');
+  if(active && active.mode===m && alreadyVisible) return; // riktig config er allerede aktiv OG faktisk synlig — ingenting å gjøre
   // Kun ekte configs — en forespørselskopi med riktig modus skal ALDRI
   // kunne bli funnet og gjort aktiv her (audit-funn H-ny-1: samme
   // invariant-brudd-mønster som i konfigRemove).
@@ -4132,6 +4152,16 @@ function setView(v){
   const isMulti = S.type !== 'straight';
   const fsel = document.getElementById('flight-sel');
   fsel.style.display = (v==='2d' && isMulti) ? 'flex' : 'none';
+  // Defensiv re-bekreftelse av hvilken verktøylinje (trapp/gangbane) som
+  // skal vises — uavhengig av hva som eventuelt har rørt disse tidligere.
+  // Rapportert bug: "3D"-knappen ble usynlig etter å ha trykket "2D
+  // Tegning", fordi walk-toolbar (som deler nøyaktig samme posisjon og
+  // display-verdi som view-toggle) noen ganger endte opp synlig samtidig.
+  // Ved å eksplisitt sette begge her, hver gang visningen byttes, kan
+  // ALDRI feil verktøylinje bli stående synlig — uansett hva som var
+  // årsaken til at den kom ut av synk i utgangspunktet.
+  document.getElementById('view-toggle').style.display  = currentMode==='stair' ? 'flex' : 'none';
+  document.getElementById('walk-toolbar').style.display = currentMode==='walk'  ? 'flex' : 'none';
   if(v==='2d' && currentMode==='stair') triggerDraw2D();
 }
 
