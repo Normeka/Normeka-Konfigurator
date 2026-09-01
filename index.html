@@ -2325,6 +2325,47 @@ function buildWalk(){
       }
     }
 
+    // ── Bæring: søyler under skisse-bygget system ──
+    // Samme "Med søyler"/"Selvbærende"-valg (W.bearing/W.span) som den
+    // enkle gangbanen bruker, gjenbrukt her — men siden formen er en fri
+    // (potensielt forgrenet) polygon-kontur i stedet for én rett strekning,
+    // plasseres søylene med jevn avstand (W.span) langs HVER kant av
+    // konturen, i stedet for langs én enkelt lengdeakse. Går gjennom
+    // samme punktliste (allPts) som rekkverket over, for konsistens.
+    // Unngår dobbel søyle i hjørner: kun første kant starter tellingen på
+    // t=0 (det aller første punktet) — hver senere kant starter på neste
+    // intervall, siden t=0 der er identisk med forrige kants sluttpunkt
+    // (allerede dekket av en søyle der).
+    let postCount = 0;
+    if(W.bearing === 'posts' && elev > 0.05){
+      const span = W.span / 100;
+      for(let i=0;i<allPts.length-1;i++){
+        const a=allPts[i], b=allPts[i+1];
+        const wax=a.x, waz=-a.y, wbx=b.x, wbz=-b.y;
+        const wdx=wbx-wax, wdz=wbz-waz;
+        const segLen=Math.sqrt(wdx*wdx+wdz*wdz);
+        if(segLen < 0.05) continue;
+        const numPosts = Math.max(1, Math.round(segLen/span));
+        // Siste kant i en lukket kontur går tilbake til startpunktet (allPts[0]) —
+        // det punktet fikk allerede en søyle fra aller første kant (i===0, s=0),
+        // så her stoppes ett hakk tidligere for å unngå en dobbel søyle akkurat der.
+        const isLastEdge = (i === allPts.length-2);
+        const sMax = isLastEdge ? numPosts-1 : numPosts;
+        for(let s=(i===0?0:1); s<=sMax; s++){
+          const t = s/numPosts;
+          const px = wax+wdx*t, pz = waz+wdz*t;
+          const post = box(P.ST_S, elev, P.ST_S, matD);
+          post.position.set(px, elev/2, pz);
+          post.castShadow = true;
+          grp.add(post);
+          const base = box(0.180, 0.020, 0.180, matD);
+          base.position.set(px, 0.010, pz);
+          grp.add(base);
+          postCount++;
+        }
+      }
+    }
+
     // Compute area via shoelace
     let area=0;
     for(let i=0;i<pts.length;i++){
@@ -2336,7 +2377,7 @@ function buildWalk(){
     document.getElementById('ws-l').textContent='Sketch ('+SK.points.length+' punkter)';
     document.getElementById('ws-w').textContent=Math.round(GBW*1000)+' mm';
     document.getElementById('ws-a').textContent=area.toFixed(2)+' m²';
-    document.getElementById('ws-p').textContent=W.bearing==='posts'?'—':'Selvbærende';
+    document.getElementById('ws-p').textContent=W.bearing==='posts'?(postCount+' stk'):'Selvbærende';
     document.getElementById('sketch-rail-note').style.display='block';
 
     const bbox2=new THREE.Box3().setFromObject(grp);
@@ -3215,7 +3256,9 @@ function _applySketchFromW(){
     const stEl=document.getElementById('sketch-status'); if(stEl) stEl.style.display='block';
     const noteEl=document.getElementById('sketch-note'); if(noteEl) noteEl.style.display='block';
     const clrBtn=document.getElementById('sketch-clear-btn'); if(clrBtn) clrBtn.style.display='';
-    ['walk-dimensjoner-section','walk-bearing-section','walk-grating-section','walk-rail-section','walk-surface-section'].forEach(id=>{
+    // walk-bearing-section holdes IKKE lenger skjult i skisse-modus — den
+    // gjelder nå også for skisse-bygde systemer (søyler under geometrien).
+    ['walk-dimensjoner-section','walk-grating-section','walk-rail-section','walk-surface-section'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='none';
     });
   } else {
@@ -4484,7 +4527,11 @@ const SK = {
   MIN_SEG: 0.250,
   GRID:    0.10,
   scale:   100,
-  ox: 60, oy: 60
+  ox: 60, oy: 60,
+  // Panorering (høyre museknapp) — se egne event-listenere lenger ned
+  _panning: false,
+  _panStartPx: null,
+  _panStartOrigin: null
 };
 
 function openSketchMode(){
@@ -4827,6 +4874,22 @@ function sketchRemovePt(i){
 
 // Canvas interactions
 document.getElementById('sketch-cv').addEventListener('mousemove',function(e){
+  if(SK._panning){
+    // Panorering: flytt origo (SK.ox/oy) tilsvarende musebevegelsen siden
+    // høyre knapp ble trykket ned. Konverterer klientpiksler til canvas-
+    // interne piksler (samme skalering som sketchCursorPos bruker), slik
+    // at panoreringen føles 1:1 uavhengig av devicePixelRatio/CSS-skalering.
+    const cv = this;
+    const rect = cv.getBoundingClientRect();
+    const scaleX = cv.width  / devicePixelRatio / rect.width;
+    const scaleY = cv.height / devicePixelRatio / rect.height;
+    const dxPx = (e.clientX - SK._panStartPx.x) * scaleX;
+    const dyPx = (e.clientY - SK._panStartPx.y) * scaleY;
+    SK.ox = SK._panStartOrigin.ox + dxPx;
+    SK.oy = SK._panStartOrigin.oy + dyPx;
+    sketchDraw();
+    return;
+  }
   if(SK.closed) return;
   const raw=sketchCursorPos(e);
   let snap = raw;
@@ -4844,6 +4907,55 @@ document.getElementById('sketch-cv').addEventListener('mousemove',function(e){
   sketchDraw(snap);
 });
 document.getElementById('sketch-cv').addEventListener('mouseleave',()=>sketchDraw());
+
+// ── Panorering med høyre museknapp ──────────────────────────────
+// Høyreklikk+dra flytter tegneområdets origo (SK.ox/SK.oy) i stedet for å
+// åpne nettleserens kontekstmeny. Selve flyttingen skjer i mousemove-
+// håndtereren over; her styres kun start/slutt på panorerings-tilstanden.
+document.getElementById('sketch-cv').addEventListener('contextmenu', function(e){
+  e.preventDefault();
+});
+document.getElementById('sketch-cv').addEventListener('mousedown', function(e){
+  if(e.button !== 2) return; // kun høyre museknapp
+  e.preventDefault();
+  SK._panning = true;
+  SK._panStartPx = { x: e.clientX, y: e.clientY };
+  SK._panStartOrigin = { ox: SK.ox, oy: SK.oy };
+  this.style.cursor = 'grabbing';
+});
+window.addEventListener('mouseup', function(){
+  if(!SK._panning) return;
+  SK._panning = false;
+  const cv = document.getElementById('sketch-cv');
+  if(cv) cv.style.cursor = 'crosshair';
+});
+
+// ── Zoom med musehjul ────────────────────────────────────────────
+// Zoomer inn/ut sentrert på musepekeren (peker-punktet i verdenskoordinater
+// forblir under musa etter zoom) — ikke sentrert på origo, som ville følt
+// seg feil for brukeren.
+const SK_MIN_SCALE = 8;   // px/meter — sterkt utzoomet
+const SK_MAX_SCALE = 600; // px/meter — sterkt innzoomet
+document.getElementById('sketch-cv').addEventListener('wheel', function(e){
+  e.preventDefault(); // hindre siden i å scrolle mens man zoomer i tegningen
+  const cv = this;
+  const rect = cv.getBoundingClientRect();
+  const scaleX = cv.width  / devicePixelRatio / rect.width;
+  const scaleY = cv.height / devicePixelRatio / rect.height;
+  const cx = (e.clientX - rect.left) * scaleX;
+  const cy = (e.clientY - rect.top)  * scaleY;
+  // Verdenspunktet som ligger under musepekeren FØR zoom
+  const wx = (cx - SK.ox) / SK.scale;
+  const wy = (SK.oy - cy) / SK.scale;
+  const factor = e.deltaY < 0 ? 1.12 : 1/1.12; // hjul opp = zoom inn
+  const newScale = Math.max(SK_MIN_SCALE, Math.min(SK_MAX_SCALE, SK.scale * factor));
+  SK.scale = newScale;
+  // Flytt origo slik at det SAMME verdenspunktet fortsatt ligger under musepekeren
+  SK.ox = cx - wx * newScale;
+  SK.oy = cy + wy * newScale;
+  sketchDraw();
+}, { passive: false });
+
 
 document.getElementById('sketch-cv').addEventListener('click',function(e){
   if(SK.closed) return;
@@ -4933,8 +5045,9 @@ function sketchApply(){
   document.getElementById('sketch-status').style.display='block';
   document.getElementById('sketch-note').style.display='block';
   document.getElementById('sketch-clear-btn').style.display='';
-  // Hide irrelevant walk panels (length, width, bearing, grating, rail, surface)
-  ['walk-dimensjoner-section','walk-bearing-section','walk-grating-section','walk-rail-section','walk-surface-section'].forEach(id=>{
+  // Hide irrelevant walk panels (length, width, grating, rail, surface).
+  // walk-bearing-section holdes synlig — gjelder nå også skisse-bygde systemer.
+  ['walk-dimensjoner-section','walk-grating-section','walk-rail-section','walk-surface-section'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.style.display='none';
   });
   buildWalk();
