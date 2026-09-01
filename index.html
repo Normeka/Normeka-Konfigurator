@@ -694,17 +694,26 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
   <div class="sketch-header">
     <h2>✏ Skisse — Egendefinert gangbane</h2>
     <div class="sketch-toolbar">
+      <span style="display:flex;gap:2px;background:rgba(255,255,255,.12);border-radius:6px;padding:2px;margin-right:.4rem;">
+        <button id="sk-lt-wire" onclick="sketchSetLineType('wire')" title="Neste kant du tegner får IKKE rekkverk"
+          style="padding:.3rem .6rem;background:#fff;color:var(--nblue);border:none;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer;">➖ Vanlig linje</button>
+        <button id="sk-lt-normal" onclick="sketchSetLineType('normal')" title="Neste kant du tegner får rekkverk"
+          style="padding:.3rem .6rem;background:transparent;color:#fff;border:none;border-radius:5px;font-size:.75rem;cursor:pointer;">🔗 Rekkverkslinje</button>
+      </span>
+      <button id="sk-add-post-btn" onclick="sketchToggleAddPostMode()" title="Klikk her, deretter klikk i tegningen for å legge til en søyle der"
+        style="padding:.3rem .6rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.75rem;cursor:pointer;margin-right:.4rem;">➕ Søyle</button>
       <button onclick="sketchApply()" style="padding:.3rem .9rem;background:var(--ngreen);color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;">▶ Generer 3D</button>
       <button onclick="sketchUndo()" style="padding:.3rem .7rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.8rem;cursor:pointer;">↩ Angre</button>
       <button onclick="sketchClear()" style="padding:.3rem .7rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.8rem;cursor:pointer;">✕ Tøm</button>
       <button onclick="closeSketchMode()" style="padding:.3rem .7rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.8rem;cursor:pointer;">✕ Lukk</button>
+
     </div>
   </div>
   <div class="sketch-body">
     <div class="sketch-canvas-wrap">
       <canvas id="sketch-cv"></canvas>
       <div style="position:absolute;bottom:.5rem;left:.5rem;font-size:.68rem;color:#888;background:rgba(255,255,255,.85);padding:.2rem .5rem;border-radius:1rem;">
-        Klikk for å sette punkt · Klikk 🟡 for å lukke · Dobbeltklikk segment for eksakt mål
+        Klikk for å sette punkt · Klikk 🟡 for å lukke · Dobbeltklikk segment for eksakt mål · Klikk en linje i lukket form for å bytte rekkverk/vanlig
       </div>
     </div>
     <div class="sketch-sidebar">
@@ -1400,7 +1409,7 @@ const W = {
   length:6, height:100, span:200,
   bearing:'self', wallmount:false,
   widthCm:120,   // gangbane bredde 40–250cm
-  usage:'industry', grating:'open', mat:'alu-raw', sketchRailExcluded: new Set(),
+  usage:'industry', grating:'open', mat:'alu-raw', sketchRailExcluded: new Set(), sketchPosts: null,
   railType:'topp', whand:true, wtoe:false
 };
 
@@ -2291,79 +2300,48 @@ function buildWalk(){
         // Angle i world XZ-planet: rotation.y = atan2(wdx, wdz) for en boks langs Z-aksen
         const wAngle = Math.atan2(wdx, wdz);
 
-        // Stolper — tagget for klikk
+        // Stolper
         const nSt = Math.max(2, Math.ceil(segLen/1.2)+1);
         for(let s=0;s<nSt;s++){
           const t=s/(nSt-1);
           const px=wax+wdx*t, pz=waz+wdz*t;
           const st=box(ST_S, RL, ST_S, railMat);
           st.position.set(px, topY+RL/2, pz);
-          st.userData = { type:'sketchRail', sketchRail: true, segIdx: i };
           grp.add(st);
         }
-        // Knelist — tagget for klikk
+        // Knelist
         const kl=box(0.010, 0.050, segLen, railMatD);
         kl.position.set(wcx, topY+RL*0.5, wcz);
         kl.rotation.y=wAngle;
-        kl.userData = { type:'sketchRail', sketchRail: true, segIdx: i };
         grp.add(kl);
-        // Håndløper — tagget for klikk
+        // Håndløper
         const hl=box(HL_W, HL_H, segLen, railMat);
         hl.position.set(wcx, topY+RL, wcz);
         hl.rotation.y=wAngle;
-        hl.userData = { type:'sketchRail', sketchRail: true, segIdx: i };
         grp.add(hl);
-        // Usynlig hitplane
-        // Hitbox: smal i dybde, litt kortere enn segmentet for å unngå overlapp i hjørner
-        const hitGeo = new THREE.BoxGeometry(segLen * 0.85, RL, 0.20);
-        const hitMat = new THREE.MeshBasicMaterial({transparent:true,opacity:0.001,depthWrite:false,side:THREE.DoubleSide});
-        const hit = new THREE.Mesh(hitGeo, hitMat);
-        hit.position.set(wcx, topY+RL/2, wcz);
-        hit.rotation.y=wAngle;
-        hit.userData = { type:'sketchRail', sketchRail: true, segIdx: i };
-        grp.add(hit);
       }
     }
 
     // ── Bæring: søyler under skisse-bygget system ──
     // Samme "Med søyler"/"Selvbærende"-valg (W.bearing/W.span) som den
-    // enkle gangbanen bruker, gjenbrukt her — men siden formen er en fri
-    // (potensielt forgrenet) polygon-kontur i stedet for én rett strekning,
-    // plasseres søylene med jevn avstand (W.span) langs HVER kant av
-    // konturen, i stedet for langs én enkelt lengdeakse. Går gjennom
-    // samme punktliste (allPts) som rekkverket over, for konsistens.
-    // Unngår dobbel søyle i hjørner: kun første kant starter tellingen på
-    // t=0 (det aller første punktet) — hver senere kant starter på neste
-    // intervall, siden t=0 der er identisk med forrige kants sluttpunkt
-    // (allerede dekket av en søyle der).
+    // enkle gangbanen bruker. Posisjonene kommer fra _getSketchPostPositions()
+    // (delt med 2D-skisseforhåndsvisningen, se den for detaljer om
+    // automatisk vs. brukerdefinert plassering).
     let postCount = 0;
     if(W.bearing === 'posts' && elev > 0.05){
       const span = W.span / 100;
-      for(let i=0;i<allPts.length-1;i++){
-        const a=allPts[i], b=allPts[i+1];
-        const wax=a.x, waz=-a.y, wbx=b.x, wbz=-b.y;
-        const wdx=wbx-wax, wdz=wbz-waz;
-        const segLen=Math.sqrt(wdx*wdx+wdz*wdz);
-        if(segLen < 0.05) continue;
-        const numPosts = Math.max(1, Math.round(segLen/span));
-        // Siste kant i en lukket kontur går tilbake til startpunktet (allPts[0]) —
-        // det punktet fikk allerede en søyle fra aller første kant (i===0, s=0),
-        // så her stoppes ett hakk tidligere for å unngå en dobbel søyle akkurat der.
-        const isLastEdge = (i === allPts.length-2);
-        const sMax = isLastEdge ? numPosts-1 : numPosts;
-        for(let s=(i===0?0:1); s<=sMax; s++){
-          const t = s/numPosts;
-          const px = wax+wdx*t, pz = waz+wdz*t;
-          const post = box(P.ST_S, elev, P.ST_S, matD);
-          post.position.set(px, elev/2, pz);
-          post.castShadow = true;
-          grp.add(post);
-          const base = box(0.180, 0.020, 0.180, matD);
-          base.position.set(px, 0.010, pz);
-          grp.add(base);
-          postCount++;
-        }
-      }
+      const postPositions = _getSketchPostPositions(pts, span);
+      postPositions.forEach(p => {
+        const px = p.x, pz = -p.y; // skisse-XY → world-XZ, samme konvertering som resten av funksjonen
+        const post = box(P.ST_S, elev, P.ST_S, matD);
+        post.position.set(px, elev/2, pz);
+        post.castShadow = true;
+        grp.add(post);
+        const base = box(0.180, 0.020, 0.180, matD);
+        base.position.set(px, 0.010, pz);
+        grp.add(base);
+        postCount++;
+      });
     }
 
     // Compute area via shoelace
@@ -3183,7 +3161,13 @@ document.querySelectorAll('[data-wb]').forEach(b=>b.addEventListener('click',()=
   b.classList.add('tbw'); W.bearing=b.dataset.wb;
   document.getElementById('w-span-row').style.display   = W.bearing==='posts'?'block':'none';
   document.getElementById('w-height-row').style.display = W.bearing==='posts'?'block':'none';
-  W.sketchRailExcluded = new Set(); updateWalkWarnings(); if(WalkSegs.length>1) buildAllWalkSegs(); else buildWalk();
+  // Nullstiller kun sketchRailExcluded for IKKE-skisse-bygde gangbaner —
+  // for en skisse-bygget geometri er dette feltet brukerens bevisste valg
+  // av hvilke kanter som skal ha rekkverk, satt i skisseverktøyet. Å
+  // nullstille det her (uansett bearing-valg) er det som fikk "Med
+  // søyler" til å slå rekkverket tilbake til hele omkretsen igjen.
+  if(!(W.sketchPoints && W.sketchClosed)) W.sketchRailExcluded = new Set();
+  updateWalkWarnings(); if(WalkSegs.length>1) buildAllWalkSegs(); else buildWalk();
 }));
 
 function updateWalkWarnings(){
@@ -3728,7 +3712,7 @@ function serializeProject(){
               reposRailExcluded: [...(k.snapS.reposRailExcluded||[])],
               flightRailExcluded: [...(k.snapS.flightRailExcluded||[])] },
             REPOS: { ...k.snapREPOS } }
-        : { W: { ...k.snapW, sketchRailExcluded: [...(k.snapW.sketchRailExcluded||[])] },
+        : { W: { ...k.snapW, sketchRailExcluded: [...(k.snapW.sketchRailExcluded||[])], sketchPosts: k.snapW.sketchPosts ? k.snapW.sketchPosts.map(p=>({...p})) : null },
             walkSegs: k.walkSegs ? { segs: k.walkSegs.segs.map(s=>({...s})), nextId: k.walkSegs.nextId } : { segs:[], nextId:1 } }
     }))
   };
@@ -3765,7 +3749,8 @@ function _deserializeConfigEntry(entry){
     return { id, mode:'stair', label: entry.label || 'Trapp', labelIsCustom: !!entry.labelIsCustom, snapS, snapW: _freshWalkW(), snapREPOS, walkSegs:null, _iForesp: !!entry._iForesp };
   }
   const w = (entry.state && entry.state.W) || {};
-  const snapW = { ..._freshWalkW(), ...w, sketchRailExcluded: new Set(_toArraySafe(w.sketchRailExcluded)) };
+  const snapW = { ..._freshWalkW(), ...w, sketchRailExcluded: new Set(_toArraySafe(w.sketchRailExcluded)),
+    sketchPosts: Array.isArray(w.sketchPosts) ? w.sketchPosts.map(p=>({...p})) : null };
   const ws = (entry.state && entry.state.walkSegs) || {segs:[],nextId:1};
   const id = entry.id || _generateConfigId('walk');
   return { id, mode:'walk', label: entry.label || 'Gangbane', labelIsCustom: !!entry.labelIsCustom, snapS: _freshStairS(), snapW, snapREPOS: _freshREPOS(),
@@ -4494,20 +4479,6 @@ canvas.addEventListener('mouseup', e=>{
         setTimeout(() => { buildStair(); showToast('✕ Rekkverk fjernet — bruk «Tilbakestill» for å få det tilbake'); }, 200);
       }
       return;
-    } else if(t==='sketchRail'){
-      const idx = obj.userData.segIdx;
-      if(!W.sketchRailExcluded) W.sketchRailExcluded = new Set();
-      tip.style.display='none';
-      if(W.sketchRailExcluded.has(idx)){
-        W.sketchRailExcluded.delete(idx);
-        buildWalk();
-        showToast('↩ Rekkverk gjenopprettet');
-      } else {
-        W.sketchRailExcluded.add(idx);
-        buildWalk();
-        showToast('✕ Rekkverk fjernet — klikk igjen for å gjenopprette');
-      }
-      return;
     }
     document.getElementById('mt-title').textContent=title;
     document.getElementById('mt-body').innerHTML=body;
@@ -4531,12 +4502,93 @@ const SK = {
   // Panorering (høyre museknapp) — se egne event-listenere lenger ned
   _panning: false,
   _panStartPx: null,
-  _panStartOrigin: null
+  _panStartOrigin: null,
+  // Linjetype per kant — Set med kant-indekser som IKKE skal ha rekkverk
+  // ("vanlig linje"). Kant i forbinder points[i] til points[i+1] (eller,
+  // for siste kant i en lukket form, points[siste] tilbake til points[0]).
+  // Samme indekseringsskjema som W.sketchRailExcluded, som denne kopieres
+  // rett inn i ved sketchApply() — se der for hvorfor.
+  railExcluded: new Set(),
+  // Hvilken linjetype som brukes for NESTE kant som tegnes — vedvarer til
+  // brukeren bytter, som et tegneverktøy-valg. Standard "wire" (rekkverk),
+  // siden de fleste kanter i et typisk system skal ha rekkverk — brukeren
+  // trenger da bare aktivt velge "normal" for unntakene.
+  currentLineType: 'wire',
+  // Søyleposisjoner (skisse-XY-koordinater) for GJELDENDE tegneøkt — null
+  // til formen er lukket OG bæring er "posts", da beregnes den automatisk
+  // (se _getSketchPostPositions). Brukeren kan deretter fjerne enkelt-
+  // søyler eller legge til egendefinerte — se sketchDraw()/klikk-håndterer.
+  posts: null,
+  // Når true: neste klikk i tegneflaten legger til en søyle på nøyaktig
+  // det punktet, i stedet for å fjerne nærmeste søyle/bytte linjetype.
+  addPostMode: false
 };
+
+// Henter søyleposisjoner for et skisse-bygget system (skisse-XY-
+// koordinater, samme system som pts/W.sketchPoints/SK.points). Bruker
+// en eksplisitt liste (W.sketchPosts i buildWalk / SK.posts i selve
+// skisseverktøyet) hvis brukeren har tilpasset plasseringen — ellers
+// beregnes automatisk jevnt fordelte posisjoner langs HVER kant av
+// konturen. Delt mellom buildWalk() (faktisk 3D-plassering) og selve
+// 2D-skissen (forhåndsvisning + klikk-for-å-fjerne), slik at de to
+// aldri kan komme ut av synk med hverandre.
+function _computeDefaultSketchPosts(pts, span){
+  const allPts = [...pts, pts[0]];
+  const out = [];
+  for(let i=0;i<allPts.length-1;i++){
+    const a=allPts[i], b=allPts[i+1];
+    const dx=b.x-a.x, dy=b.y-a.y;
+    const segLen=Math.sqrt(dx*dx+dy*dy);
+    if(segLen < 0.05) continue;
+    const numPosts = Math.max(1, Math.round(segLen/span));
+    // Siste kant i en lukket kontur går tilbake til startpunktet — det
+    // punktet fikk allerede en søyle fra aller første kant (i===0, s=0),
+    // så her stoppes ett hakk tidligere for å unngå en dobbel søyle der.
+    const isLastEdge = (i === allPts.length-2);
+    const sMax = isLastEdge ? numPosts-1 : numPosts;
+    for(let s=(i===0?0:1); s<=sMax; s++){
+      const t = s/numPosts;
+      out.push({ x: a.x+dx*t, y: a.y+dy*t });
+    }
+  }
+  return out;
+}
+// Brukt av buildWalk() (3D) — respekterer W.sketchPosts hvis brukeren har
+// tilpasset plasseringen i skisseverktøyet, ellers samme auto-beregning.
+function _getSketchPostPositions(pts, span){
+  return W.sketchPosts ? W.sketchPosts : _computeDefaultSketchPosts(pts, span);
+}
+
+// Setter hvilken linjetype NESTE tegnede kant skal få (vedvarer til
+// brukeren bytter, som et vanlig tegneverktøy-valg — ikke en engangs-
+// avmerking). Oppdaterer også knappe-utseendet slik at gjeldende valg
+// alltid er tydelig markert.
+function sketchSetLineType(type){
+  SK.currentLineType = type;
+  const wireBtn = document.getElementById('sk-lt-wire');
+  const normalBtn = document.getElementById('sk-lt-normal');
+  if(wireBtn) { wireBtn.style.background = type==='wire' ? '#fff' : 'transparent'; wireBtn.style.color = type==='wire' ? 'var(--nblue)' : '#fff'; }
+  if(normalBtn) { normalBtn.style.background = type==='normal' ? '#fff' : 'transparent'; normalBtn.style.color = type==='normal' ? 'var(--nblue)' : '#fff'; }
+}
+
+// Slår av/på "legg til søyle"-modus. Når aktiv, tolkes NESTE klikk i
+// tegneflaten (på en lukket form) som "legg til en søyle akkurat her" i
+// stedet for "fjern nærmeste søyle" eller "bytt linjetype på nærmeste
+// kant" — se klikk-håndtereren. Slår seg selv av etter ett klikk, slik at
+// et vanlig klikk rett etterpå ikke ved et uhell legger til enda en søyle.
+function sketchToggleAddPostMode(){
+  SK.addPostMode = !SK.addPostMode;
+  const btn = document.getElementById('sk-add-post-btn');
+  if(btn){
+    btn.style.background = SK.addPostMode ? 'var(--ngreen)' : 'rgba(255,255,255,.15)';
+    btn.style.borderColor = SK.addPostMode ? 'var(--ngreen)' : 'rgba(255,255,255,.3)';
+  }
+}
 
 function openSketchMode(){
   document.getElementById('sketch-overlay').classList.add('open');
   document.getElementById('sk-width-display').textContent=(W.widthCm||120)+' cm';
+  sketchSetLineType(SK.currentLineType); // synk knappe-utseende med gjeldende valg
   setTimeout(sketchInit, 60);
 }
 function closeSketchMode(){
@@ -4759,18 +4811,21 @@ function sketchDraw(hov){
     const a=fullPts[i],b=fullPts[i+1];
     const len=Math.sqrt((b.x-a.x)**2+(b.y-a.y)**2);
     const bad=len<SK.MIN_SEG-0.001;
+    const noRail=SK.railExcluded.has(i);
     const pa=w2p(a.x,a.y),pb=w2p(b.x,b.y);
     ctx.beginPath();
-    ctx.strokeStyle=bad?'#c0392b':(SK.closed?'#2d617c':'#2d617c');
-    ctx.lineWidth=2.5;
+    ctx.setLineDash(noRail?[6,4]:[]);
+    ctx.strokeStyle=bad?'#c0392b':(noRail?'#9aa0a8':'#2d617c');
+    ctx.lineWidth=noRail?1.8:2.5;
     ctx.moveTo(pa.px,pa.py); ctx.lineTo(pb.px,pb.py); ctx.stroke();
+    ctx.setLineDash([]);
     // Length label
     const mx=(pa.px+pb.px)/2, my=(pa.py+pb.py)/2;
     ctx.font=bad?'bold 10px Barlow,sans-serif':'10px Barlow,sans-serif';
     ctx.textAlign='center';
     const lbl=Math.round(len*1000)+'mm';
     ctx.fillStyle='rgba(255,255,255,.92)'; ctx.fillRect(mx-20,my-10,40,15);
-    ctx.fillStyle=bad?'#c0392b':'#1a1a18'; ctx.fillText(lbl,mx,my+2);
+    ctx.fillStyle=bad?'#c0392b':(noRail?'#777':'#1a1a18'); ctx.fillText(lbl,mx,my+2);
   }
 
   // Alignment guides
@@ -4821,6 +4876,20 @@ function sketchDraw(hov){
     }
   });
 
+  // Søyler — kun når formen er lukket og "Med søyler" er valgt. SK.posts
+  // materialiseres (auto-beregnes) første gang dette vises for gjeldende
+  // tegneøkt; brukeren kan deretter fjerne enkeltsøyler eller legge til
+  // egendefinerte via klikk-håndtereren (se der).
+  if(SK.closed && pts.length>=3 && W.bearing==='posts'){
+    if(!SK.posts) SK.posts = _computeDefaultSketchPosts(pts, W.span/100);
+    SK.posts.forEach(p=>{
+      const pp=w2p(p.x,p.y);
+      ctx.beginPath(); ctx.arc(pp.px,pp.py,5,0,Math.PI*2);
+      ctx.fillStyle='#c0392b'; ctx.fill();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+    });
+  }
+
   // Update sidebar
   sketchUpdateSidebar(errs);
   ctx.restore();
@@ -4867,6 +4936,17 @@ function sketchUpdateSidebar(errs){
 function sketchSetPtX(i,v){ if(SK.points[i]){ SK.points[i].x=snapG(parseFloat(v)/1000); sketchDraw(); }}
 function sketchSetPtY(i,v){ if(SK.points[i]){ SK.points[i].y=snapG(parseFloat(v)/1000); sketchDraw(); }}
 function sketchRemovePt(i){
+  // Fjerner linjetype-valgene for de to kantene som møttes i punktet som
+  // fjernes (formen låses uansett opp igjen ved fjerning — se under — så en
+  // eventuell "sammenslått" kant får bare sin type på nytt når brukeren
+  // lukker formen igjen, basert på gjeldende verktøyvalg).
+  const newExcluded = new Set();
+  SK.railExcluded.forEach(idx => {
+    if(idx < i-1) newExcluded.add(idx);         // upåvirket, uendret indeks
+    else if(idx === i-1 || idx === i) return;   // kant inn til/ut fra fjernet punkt — dropp
+    else newExcluded.add(idx-1);                // skift ned én, ett punkt er borte
+  });
+  SK.railExcluded = newExcluded;
   SK.points.splice(i,1);
   if(SK.closed) SK.closed=false;
   sketchDraw();
@@ -4958,7 +5038,61 @@ document.getElementById('sketch-cv').addEventListener('wheel', function(e){
 
 
 document.getElementById('sketch-cv').addEventListener('click',function(e){
-  if(SK.closed) return;
+  const rect=this.getBoundingClientRect();
+  const scaleX=this.width/devicePixelRatio/rect.width;
+  const scaleY=this.height/devicePixelRatio/rect.height;
+  const clickPx=(e.clientX-rect.left)*scaleX, clickPy=(e.clientY-rect.top)*scaleY;
+
+  if(SK.closed){
+    // Legg-til-søyle-modus har høyeste prioritet: klikket her betyr
+    // uttrykkelig "legg til en søyle akkurat her", uansett hva som
+    // ellers ligger nærmest. Slår seg selv av etter bruk (engangs-modus).
+    if(SK.addPostMode && W.bearing==='posts'){
+      if(!SK.posts) SK.posts = _computeDefaultSketchPosts(SK.points, W.span/100);
+      const world = p2w(clickPx, clickPy);
+      SK.posts.push({x: world.x, y: world.y});
+      sketchToggleAddPostMode(); // av igjen etter ett klikk
+      sketchDraw();
+      return;
+    }
+    // Deretter: klikk nær en EKSISTERENDE søyle fjerner den.
+    if(W.bearing==='posts' && SK.posts && SK.posts.length){
+      let bestPostDist=14, bestPostI=-1;
+      SK.posts.forEach((p,i)=>{
+        const pp=w2p(p.x,p.y);
+        const d=Math.sqrt((clickPx-pp.px)**2+(clickPy-pp.py)**2);
+        if(d<bestPostDist){bestPostDist=d;bestPostI=i;}
+      });
+      if(bestPostI>=0){
+        SK.posts.splice(bestPostI,1);
+        sketchDraw();
+        return;
+      }
+    }
+    // Ellers: klikk nær en KANT bytter linjetype (rekkverk/vanlig) på den.
+    // Finner nærmeste punkt på HVER kant (ikke bare midtpunktet), slik at
+    // hele linjens lengde er klikkbar.
+    const fullPts=[...SK.points,SK.points[0]];
+    let bestDist=18, bestI=-1;
+    for(let i=0;i<fullPts.length-1;i++){
+      const a=fullPts[i],b=fullPts[i+1];
+      const pa=w2p(a.x,a.y),pb=w2p(b.x,b.y);
+      const dx=pb.px-pa.px, dy=pb.py-pa.py;
+      const lenSq=dx*dx+dy*dy;
+      let t = lenSq>0 ? ((clickPx-pa.px)*dx+(clickPy-pa.py)*dy)/lenSq : 0;
+      t = Math.max(0, Math.min(1, t));
+      const px=pa.px+t*dx, py=pa.py+t*dy;
+      const d=Math.sqrt((clickPx-px)**2+(clickPy-py)**2);
+      if(d<bestDist){bestDist=d;bestI=i;}
+    }
+    if(bestI>=0){
+      if(SK.railExcluded.has(bestI)) SK.railExcluded.delete(bestI);
+      else SK.railExcluded.add(bestI);
+      sketchDraw();
+    }
+    return;
+  }
+
   const raw=sketchCursorPos(e);
   let snap = raw;
   if(SK.points.length > 0){
@@ -4971,11 +5105,11 @@ document.getElementById('sketch-cv').addEventListener('click',function(e){
     const first=SK.points[0];
     // Check distance to first point for closing
     const pf=w2p(first.x,first.y);
-    const rect=this.getBoundingClientRect();
-    const scaleX=this.width/devicePixelRatio/rect.width;
-    const scaleY=this.height/devicePixelRatio/rect.height;
-    const clickPx=(e.clientX-rect.left)*scaleX, clickPy=(e.clientY-rect.top)*scaleY;
     if(Math.sqrt((clickPx-pf.px)**2+(clickPy-pf.py)**2)<18){
+      // Lukker formen — den siste (implisitte) kanten, tilbake til
+      // startpunktet, får linjetypen som er valgt NÅ.
+      if(SK.currentLineType==='normal') SK.railExcluded.add(SK.points.length-1);
+      else SK.railExcluded.delete(SK.points.length-1);
       SK.closed=true; sketchDraw(); return;
     }
   }
@@ -4983,7 +5117,13 @@ document.getElementById('sketch-cv').addEventListener('click',function(e){
     const last=SK.points[SK.points.length-1];
     if(Math.abs(snap.x-last.x)<0.001&&Math.abs(snap.y-last.y)<0.001) return;
   }
-  SK.points.push(snap); sketchDraw(snap);
+  SK.points.push(snap);
+  // Kanten som akkurat ble tegnet (fra forrige punkt til dette) får
+  // linjetypen som var valgt i verktøylinjen idet klikket skjedde.
+  const newEdgeIdx = SK.points.length - 2;
+  if(SK.currentLineType==='normal') SK.railExcluded.add(newEdgeIdx);
+  else SK.railExcluded.delete(newEdgeIdx);
+  sketchDraw(snap);
 });
 
 // Dblclick on segment to set exact length
@@ -5015,7 +5155,7 @@ document.getElementById('sketch-cv').addEventListener('dblclick',function(e){
 
 document.getElementById('sketch-cv').addEventListener('touchstart',function(e){
   e.preventDefault();
-  if(SK.closed) return;
+  if(SK.closed) return; // trykk-for-å-bytte-linjetype på lukket form er kun via mus (klikk-håndtereren over)
   const raw=sketchCursorPos(e);
   const snap=SK.points.length>0?orthoSnap(SK.points[SK.points.length-1],raw):raw;
   if(SK.points.length>=3){
@@ -5024,10 +5164,18 @@ document.getElementById('sketch-cv').addEventListener('touchstart',function(e){
     const t=e.touches[0];
     const scX=this.width/devicePixelRatio/rect.width, scY=this.height/devicePixelRatio/rect.height;
     const d=Math.sqrt(((t.clientX-rect.left)*scX-pf.px)**2+((t.clientY-rect.top)*scY-pf.py)**2);
-    if(d<22){SK.closed=true;sketchDraw();return;}
+    if(d<22){
+      if(SK.currentLineType==='normal') SK.railExcluded.add(SK.points.length-1);
+      else SK.railExcluded.delete(SK.points.length-1);
+      SK.closed=true;sketchDraw();return;
+    }
   }
   if(SK.points.length>0){const l=SK.points[SK.points.length-1];if(Math.abs(snap.x-l.x)<0.001&&Math.abs(snap.y-l.y)<0.001)return;}
-  SK.points.push(snap); sketchDraw(snap);
+  SK.points.push(snap);
+  const newEdgeIdx = SK.points.length - 2;
+  if(SK.currentLineType==='normal') SK.railExcluded.add(newEdgeIdx);
+  else SK.railExcluded.delete(newEdgeIdx);
+  sketchDraw(snap);
 },{passive:false});
 
 function sketchApply(){
@@ -5038,6 +5186,13 @@ function sketchApply(){
   const errs=sketchErrors(allPts);
   if(errs.length>0){alert('Seksjon(er) under 250mm: '+errs.map(e=>e.l+'mm').join(', ')+'. Korriger.'); return;}
   W.sketchPoints=SK.points.map(p=>({x:p.x,y:p.y})); W.sketchClosed=true;
+  // Kopier hvilke kanter som er markert "vanlig linje" (uten rekkverk) inn i
+  // W.sketchRailExcluded — samme felt buildWalk() allerede leser per kant.
+  W.sketchRailExcluded = new Set(SK.railExcluded);
+  // Kopier evt. tilpasset søyleplassering — null betyr "ikke tilpasset",
+  // så buildWalk() beregner automatisk plassering som før (se
+  // _getSketchPostPositions).
+  W.sketchPosts = SK.posts ? SK.posts.map(p=>({x:p.x,y:p.y})) : null;
   // Close sketch and switch to 3D FIRST so Three.js canvas is visible during buildWalk
   closeSketchMode();
   setView('3d');
@@ -5054,7 +5209,17 @@ function sketchApply(){
   showToast('✓ Gangbane generert fra skisse!');
 }
 function sketchUndo(){
-  if(SK.closed){SK.closed=false;}else{SK.points.pop();}
+  if(SK.closed){
+    // Fjerner lukkings-kanten (siste punkt tilbake til første) sitt
+    // linjetype-valg, siden den kanten ikke lenger eksisterer.
+    SK.railExcluded.delete(SK.points.length-1);
+    SK.closed=false;
+  } else {
+    // Fjerner linjetype-valget for kanten som forbandt til punktet som
+    // nå fjernes (edge-indeks = nest siste punkts indeks).
+    SK.railExcluded.delete(SK.points.length-2);
+    SK.points.pop();
+  }
   if(SK.points.length===0){
     W.sketchPoints=null;W.sketchClosed=false;
     document.getElementById('sketch-status').style.display='none';
@@ -5068,7 +5233,12 @@ function sketchUndo(){
 }
 function sketchClear(){
   SK.points=[];SK.closed=false;
-  W.sketchPoints=null;W.sketchClosed=false;
+  SK.railExcluded=new Set(); SK.currentLineType='wire';
+  SK.posts=null; SK.addPostMode=false;
+  sketchSetLineType('wire');
+  const addBtn=document.getElementById('sk-add-post-btn');
+  if(addBtn){ addBtn.style.background='rgba(255,255,255,.15)'; addBtn.style.borderColor='rgba(255,255,255,.3)'; }
+  W.sketchPoints=null;W.sketchClosed=false;W.sketchPosts=null;
   document.getElementById('sketch-status').style.display='none';
   document.getElementById('sketch-note').style.display='none';
   document.getElementById('sketch-clear-btn').style.display='none';
@@ -5621,7 +5791,7 @@ function toggleTekPanel(){
 
 // Hjelpefunksjoner for deep-copy av state
 function snapS()  { return {...S,  reposRailExcluded: new Set(S.reposRailExcluded), flightRailExcluded: new Set(S.flightRailExcluded) }; }
-function snapW()  { return {...W,  sketchRailExcluded: new Set(W.sketchRailExcluded||[]) }; }
+function snapW()  { return {...W,  sketchRailExcluded: new Set(W.sketchRailExcluded||[]), sketchPosts: Array.isArray(W.sketchPosts) ? W.sketchPosts.map(p=>({...p})) : null }; }
 function snapREPOS(){ return {...REPOS}; }
 
 function applySnapS(snap) {
@@ -5632,6 +5802,7 @@ function applySnapS(snap) {
 function applySnapW(snap) {
   Object.assign(W, snap);
   W.sketchRailExcluded = new Set(snap.sketchRailExcluded||[]);
+  W.sketchPosts = Array.isArray(snap.sketchPosts) ? snap.sketchPosts.map(p=>({...p})) : null;
 }
 function applySnapREPOS(snap) { Object.assign(REPOS, snap); }
 
@@ -5776,7 +5947,7 @@ function _freshStairS(){
   return { ..._DEFAULT_S, reposRailExcluded: new Set(), flightRailExcluded: new Set() };
 }
 function _freshWalkW(){
-  return { ..._DEFAULT_W, sketchRailExcluded: new Set() };
+  return { ..._DEFAULT_W, sketchRailExcluded: new Set(), sketchPosts: null };
 }
 function _freshREPOS(){
   // breddeMm/dybdeMm settes bevisst til default trappbredde (ikke 0) — en
