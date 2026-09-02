@@ -694,12 +694,6 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
   <div class="sketch-header">
     <h2>✏ Skisse — Egendefinert gangbane</h2>
     <div class="sketch-toolbar">
-      <span style="display:flex;gap:2px;background:rgba(255,255,255,.12);border-radius:6px;padding:2px;margin-right:.4rem;">
-        <button id="sk-lt-wire" onclick="sketchSetLineType('wire')" title="Neste kant du tegner får rekkverk"
-          style="padding:.3rem .6rem;background:#fff;color:var(--nblue);border:none;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer;">🔗 Rekkverkslinje</button>
-        <button id="sk-lt-normal" onclick="sketchSetLineType('normal')" title="Neste kant du tegner får IKKE rekkverk"
-          style="padding:.3rem .6rem;background:transparent;color:#fff;border:none;border-radius:5px;font-size:.75rem;cursor:pointer;">➖ Uten rekkverk</button>
-      </span>
       <button id="sk-add-post-btn" onclick="sketchToggleAddPostMode()" title="Klikk her, deretter klikk i tegningen for å legge til en søyle der"
         style="padding:.3rem .6rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.75rem;cursor:pointer;margin-right:.4rem;">➕ Søyle</button>
       <button onclick="sketchApply()" style="padding:.3rem .9rem;background:var(--ngreen);color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;">▶ Generer 3D</button>
@@ -713,7 +707,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
     <div class="sketch-canvas-wrap">
       <canvas id="sketch-cv"></canvas>
       <div style="position:absolute;bottom:.5rem;left:.5rem;font-size:.68rem;color:#888;background:rgba(255,255,255,.85);padding:.2rem .5rem;border-radius:1rem;">
-        Klikk for å sette punkt · Klikk 🟡 for å lukke · Dobbeltklikk segment for eksakt mål · Klikk en linje i lukket form for å bytte rekkverk/vanlig
+        Klikk for å sette punkt · Klikk 🟡 for å lukke · Dobbeltklikk segment for eksakt mål · Klikk en linje i LUKKET form for å bytte mellom rekkverk/uten rekkverk
       </div>
     </div>
     <div class="sketch-sidebar">
@@ -1254,9 +1248,6 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div id="sketch-status" style="display:none;margin-top:.5rem;padding:.4rem .6rem;background:#eef3e8;border-radius:6px;border:1px solid var(--ngreen);font-size:.75rem;color:var(--ngreen);font-weight:600;">
           ✓ Egendefinert form aktiv
         </div>
-        <div id="sketch-note" style="display:none;margin-top:.5rem;padding:.5rem .7rem;background:#fff8e8;border:1px solid var(--nyellow);border-radius:6px;font-size:.73rem;color:#7a5a00;line-height:1.6;">
-          Rekkverk, støttebein og øvrige valg er ikke tilgjengelig for egendefinert gangbane. Spesielle ønsker må beskrives i kommentarfeltet ved forespørsel.
-        </div>
         <div id="sketch-error" style="display:none;margin-top:.4rem;"></div>
       </div>
 
@@ -1269,11 +1260,9 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
           <div class="sc"><div class="sk">Søyler</div><div class="sv" id="ws-p">—</div></div>
         </div>
         <div id="sketch-rail-note" style="display:none;">
-          <div style="font-size:.72rem;color:var(--muted);margin-bottom:.4rem;">
-            💡 Klikk på et rekkverkssegment i 3D-visningen for å fjerne det.
+          <div style="font-size:.72rem;color:var(--muted);">
+            💡 Åpne skisseverktøyet igjen og klikk på en linje for å bytte mellom rekkverk og uten rekkverk.
           </div>
-          <button onclick="W.sketchRailExcluded=new Set();buildWalk();showToast('↺ Rekkverk tilbakestilt');"
-            style="width:100%;padding:.35rem .6rem;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;font-size:.75rem;color:var(--nblue);cursor:pointer;font-family:'Barlow',sans-serif;">↺ Tilbakestill rekkverk</button>
         </div>
       </div>
 
@@ -3232,7 +3221,6 @@ function _applySketchFromW(){
     SK.closed = true;
     setTimeout(()=>{ sketchInit(); sketchDraw(); }, 100);
     const stEl=document.getElementById('sketch-status'); if(stEl) stEl.style.display='block';
-    const noteEl=document.getElementById('sketch-note'); if(noteEl) noteEl.style.display='block';
     const clrBtn=document.getElementById('sketch-clear-btn'); if(clrBtn) clrBtn.style.display='';
     // walk-bearing-section holdes IKKE lenger skjult i skisse-modus — den
     // gjelder nå også for skisse-bygde systemer (søyler under geometrien).
@@ -3242,7 +3230,6 @@ function _applySketchFromW(){
   } else {
     SK.points=[]; SK.closed=false;
     const stEl=document.getElementById('sketch-status'); if(stEl) stEl.style.display='none';
-    const noteEl=document.getElementById('sketch-note'); if(noteEl) noteEl.style.display='none';
     const clrBtn=document.getElementById('sketch-clear-btn'); if(clrBtn) clrBtn.style.display='none';
     ['walk-dimensjoner-section','walk-bearing-section','walk-grating-section','walk-rail-section','walk-surface-section'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='';
@@ -4501,13 +4488,10 @@ const SK = {
   // ("vanlig linje"). Kant i forbinder points[i] til points[i+1] (eller,
   // for siste kant i en lukket form, points[siste] tilbake til points[0]).
   // Samme indekseringsskjema som W.sketchRailExcluded, som denne kopieres
-  // rett inn i ved sketchApply() — se der for hvorfor.
+  // rett inn i ved sketchApply() — se der for hvorfor. Nye kanter får
+  // alltid rekkverk som standard (ikke ekskludert) — bytt etterpå ved å
+  // klikke på linjen når formen er lukket.
   railExcluded: new Set(),
-  // Hvilken linjetype som brukes for NESTE kant som tegnes — vedvarer til
-  // brukeren bytter, som et tegneverktøy-valg. Standard "wire" (rekkverk),
-  // siden de fleste kanter i et typisk system skal ha rekkverk — brukeren
-  // trenger da bare aktivt velge "normal" for unntakene.
-  currentLineType: 'wire',
   // Søyleposisjoner (skisse-XY-koordinater) for GJELDENDE tegneøkt — null
   // til formen er lukket OG bæring er "posts", da beregnes den automatisk
   // (se _getSketchPostPositions). Brukeren kan deretter fjerne enkelt-
@@ -4557,18 +4541,6 @@ function _getSketchPostPositions(pts, span){
   return W.sketchPosts ? W.sketchPosts : _computeDefaultSketchPosts(pts, span);
 }
 
-// Setter hvilken linjetype NESTE tegnede kant skal få (vedvarer til
-// brukeren bytter, som et vanlig tegneverktøy-valg — ikke en engangs-
-// avmerking). Oppdaterer også knappe-utseendet slik at gjeldende valg
-// alltid er tydelig markert.
-function sketchSetLineType(type){
-  SK.currentLineType = type;
-  const wireBtn = document.getElementById('sk-lt-wire');
-  const normalBtn = document.getElementById('sk-lt-normal');
-  if(wireBtn) { wireBtn.style.background = type==='wire' ? '#fff' : 'transparent'; wireBtn.style.color = type==='wire' ? 'var(--nblue)' : '#fff'; }
-  if(normalBtn) { normalBtn.style.background = type==='normal' ? '#fff' : 'transparent'; normalBtn.style.color = type==='normal' ? 'var(--nblue)' : '#fff'; }
-}
-
 // Slår av/på "legg til søyle"-modus. Når aktiv, tolkes NESTE klikk i
 // tegneflaten (på en lukket form) som "legg til en søyle akkurat her" i
 // stedet for "fjern nærmeste søyle" eller "bytt linjetype på nærmeste
@@ -4587,7 +4559,6 @@ function sketchToggleAddPostMode(){
 function openSketchMode(){
   document.getElementById('sketch-overlay').classList.add('open');
   document.getElementById('sk-width-display').textContent=(W.widthCm||120)+' cm';
-  sketchSetLineType(SK.currentLineType); // synk knappe-utseende med gjeldende valg
   setTimeout(sketchInit, 60);
 }
 function closeSketchMode(){
@@ -4855,20 +4826,14 @@ function sketchDraw(hov){
     const pa=w2p(pts[pts.length-1].x,pts[pts.length-1].y);
     const pb=w2p(snap.x,snap.y);
     const segLenM=Math.sqrt((snap.x-pts[pts.length-1].x)**2+(snap.y-pts[pts.length-1].y)**2);
-    const previewNoRail = SK.currentLineType==='normal';
     ctx.beginPath();
-    // Stiplingen her betydde tidligere kun "ikke plassert ennå" — men siden
-    // "ingen rekkverk"-kanter OGSÅ tegnes stiplet (se Segments-løkken over),
-    // så forhåndsvisningen alltid ut som "ingen rekkverk", uansett hvilken
-    // linjetype som faktisk var valgt. Kanten ble først riktig (heltrukket)
-    // idet du klikket — det er trolig det som oppleves som "byttet om".
-    // Forhåndsvisningen matcher nå alltid det faktiske resultatet: stiplet
-    // grå for "vanlig linje" (ingen rekkverk), tettere stiplet blå for
-    // "rekkverkslinje" (fortsatt tydelig markert som "ikke plassert ennå").
-    ctx.setLineDash(previewNoRail?[6,4]:[3,2]);
+    // Nye kanter får alltid rekkverk som standard (bytt evt. etterpå ved å
+    // klikke på linjen når formen er lukket) — forhåndsvisningen trenger
+    // derfor ikke lenger skille mellom to linjetyper.
+    ctx.setLineDash([3,2]);
     const segOk=segLenM>=SK.MIN_SEG||segLenM<0.001;
-    ctx.strokeStyle=!segOk?'rgba(192,57,43,.6)':(previewNoRail?'rgba(154,160,168,.8)':'rgba(45,97,124,.75)');
-    ctx.lineWidth=previewNoRail?1.8:2.2;
+    ctx.strokeStyle=!segOk?'rgba(192,57,43,.6)':'rgba(45,97,124,.75)';
+    ctx.lineWidth=2.2;
     ctx.moveTo(pa.px,pa.py); ctx.lineTo(pb.px,pb.py); ctx.stroke(); ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(pb.px,pb.py,4,0,Math.PI*2);
     ctx.fillStyle='#f19d0d'; ctx.fill();
@@ -5323,9 +5288,9 @@ document.getElementById('sketch-cv').addEventListener('click',function(e){
     const pf=w2p(first.x,first.y);
     if(Math.sqrt((clickPx-pf.px)**2+(clickPy-pf.py)**2)<18){
       // Lukker formen — den siste (implisitte) kanten, tilbake til
-      // startpunktet, får linjetypen som er valgt NÅ.
-      if(SK.currentLineType==='normal') SK.railExcluded.add(SK.points.length-1);
-      else SK.railExcluded.delete(SK.points.length-1);
+      // startpunktet, får rekkverk som standard (kan endres etterpå ved
+      // å klikke på linjen — se håndtereren for lukket form over).
+      SK.railExcluded.delete(SK.points.length-1);
       SK.closed=true; sketchDraw(); return;
     }
   }
@@ -5334,11 +5299,10 @@ document.getElementById('sketch-cv').addEventListener('click',function(e){
     if(Math.abs(snap.x-last.x)<0.001&&Math.abs(snap.y-last.y)<0.001) return;
   }
   SK.points.push(snap);
-  // Kanten som akkurat ble tegnet (fra forrige punkt til dette) får
-  // linjetypen som var valgt i verktøylinjen idet klikket skjedde.
+  // Nye kanter får rekkverk som standard — bytt etterpå ved å klikke på
+  // linjen når formen er lukket.
   const newEdgeIdx = SK.points.length - 2;
-  if(SK.currentLineType==='normal') SK.railExcluded.add(newEdgeIdx);
-  else SK.railExcluded.delete(newEdgeIdx);
+  SK.railExcluded.delete(newEdgeIdx);
   sketchDraw(snap);
 });
 
@@ -5381,16 +5345,14 @@ document.getElementById('sketch-cv').addEventListener('touchstart',function(e){
     const scX=this.width/devicePixelRatio/rect.width, scY=this.height/devicePixelRatio/rect.height;
     const d=Math.sqrt(((t.clientX-rect.left)*scX-pf.px)**2+((t.clientY-rect.top)*scY-pf.py)**2);
     if(d<22){
-      if(SK.currentLineType==='normal') SK.railExcluded.add(SK.points.length-1);
-      else SK.railExcluded.delete(SK.points.length-1);
+      SK.railExcluded.delete(SK.points.length-1);
       SK.closed=true;sketchDraw();return;
     }
   }
   if(SK.points.length>0){const l=SK.points[SK.points.length-1];if(Math.abs(snap.x-l.x)<0.001&&Math.abs(snap.y-l.y)<0.001)return;}
   SK.points.push(snap);
   const newEdgeIdx = SK.points.length - 2;
-  if(SK.currentLineType==='normal') SK.railExcluded.add(newEdgeIdx);
-  else SK.railExcluded.delete(newEdgeIdx);
+  SK.railExcluded.delete(newEdgeIdx);
   sketchDraw(snap);
 },{passive:false});
 
@@ -5414,7 +5376,6 @@ function sketchApply(){
   setView('3d');
   // Update status in sidebar
   document.getElementById('sketch-status').style.display='block';
-  document.getElementById('sketch-note').style.display='block';
   document.getElementById('sketch-clear-btn').style.display='';
   // Hide irrelevant walk panels (length, width, grating, rail, surface).
   // walk-bearing-section holdes synlig — gjelder nå også skisse-bygde systemer.
@@ -5439,7 +5400,6 @@ function sketchUndo(){
   if(SK.points.length===0){
     W.sketchPoints=null;W.sketchClosed=false;
     document.getElementById('sketch-status').style.display='none';
-    document.getElementById('sketch-note').style.display='none';
     document.getElementById('sketch-clear-btn').style.display='none';
     ['walk-dimensjoner-section','walk-bearing-section','walk-grating-section','walk-rail-section','walk-surface-section'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='';
@@ -5449,14 +5409,12 @@ function sketchUndo(){
 }
 function sketchClear(){
   SK.points=[];SK.closed=false;
-  SK.railExcluded=new Set(); SK.currentLineType='wire';
+  SK.railExcluded=new Set();
   SK.posts=null; SK.addPostMode=false; SK._postHoverSnap=null;
-  sketchSetLineType('wire');
   const addBtn=document.getElementById('sk-add-post-btn');
   if(addBtn){ addBtn.style.background='rgba(255,255,255,.15)'; addBtn.style.borderColor='rgba(255,255,255,.3)'; }
   W.sketchPoints=null;W.sketchClosed=false;W.sketchPosts=null;
   document.getElementById('sketch-status').style.display='none';
-  document.getElementById('sketch-note').style.display='none';
   document.getElementById('sketch-clear-btn').style.display='none';
   // Restore walk panels
   ['walk-dimensjoner-section','walk-bearing-section','walk-grating-section','walk-rail-section','walk-surface-section'].forEach(id=>{
