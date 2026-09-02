@@ -695,10 +695,10 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
     <h2>✏ Skisse — Egendefinert gangbane</h2>
     <div class="sketch-toolbar">
       <span style="display:flex;gap:2px;background:rgba(255,255,255,.12);border-radius:6px;padding:2px;margin-right:.4rem;">
-        <button id="sk-lt-wire" onclick="sketchSetLineType('wire')" title="Neste kant du tegner får IKKE rekkverk"
-          style="padding:.3rem .6rem;background:#fff;color:var(--nblue);border:none;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer;">➖ Vanlig linje</button>
-        <button id="sk-lt-normal" onclick="sketchSetLineType('normal')" title="Neste kant du tegner får rekkverk"
-          style="padding:.3rem .6rem;background:transparent;color:#fff;border:none;border-radius:5px;font-size:.75rem;cursor:pointer;">🔗 Rekkverkslinje</button>
+        <button id="sk-lt-wire" onclick="sketchSetLineType('wire')" title="Neste kant du tegner får rekkverk"
+          style="padding:.3rem .6rem;background:#fff;color:var(--nblue);border:none;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer;">🔗 Rekkverkslinje</button>
+        <button id="sk-lt-normal" onclick="sketchSetLineType('normal')" title="Neste kant du tegner får IKKE rekkverk"
+          style="padding:.3rem .6rem;background:transparent;color:#fff;border:none;border-radius:5px;font-size:.75rem;cursor:pointer;">➖ Uten rekkverk</button>
       </span>
       <button id="sk-add-post-btn" onclick="sketchToggleAddPostMode()" title="Klikk her, deretter klikk i tegningen for å legge til en søyle der"
         style="padding:.3rem .6rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.75rem;cursor:pointer;margin-right:.4rem;">➕ Søyle</button>
@@ -1163,12 +1163,6 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div class="cr">
           <div class="cl"><span>Bredde</span><span class="cv cvw" id="wv-bw">120 cm</span></div>
           <input type="range" class="wr" id="w-bw" min="40" max="250" value="120" step="5">
-        </div>
-        <div id="w-height-row" style="display:none;">
-          <div class="cr">
-            <div class="cl"><span>Høyde over gulv</span><span class="cv cvw" id="wv-h">100 cm</span></div>
-            <input type="range" class="wr" id="w-h" min="0" max="600" value="100" step="10">
-          </div>
         </div>
       </div>
 
@@ -4521,7 +4515,11 @@ const SK = {
   posts: null,
   // Når true: neste klikk i tegneflaten legger til en søyle på nøyaktig
   // det punktet, i stedet for å fjerne nærmeste søyle/bytte linjetype.
-  addPostMode: false
+  addPostMode: false,
+  // Siste beregnede hover-forhåndsvisning for legg-til-søyle-modus (satt
+  // av mousemove, brukt av sketchDraw for guide-linjer/markør) — se
+  // _snapPostToEdgeAndPosts().
+  _postHoverSnap: null
 };
 
 // Henter søyleposisjoner for et skisse-bygget system (skisse-XY-
@@ -4578,6 +4576,7 @@ function sketchSetLineType(type){
 // et vanlig klikk rett etterpå ikke ved et uhell legger til enda en søyle.
 function sketchToggleAddPostMode(){
   SK.addPostMode = !SK.addPostMode;
+  if(!SK.addPostMode) SK._postHoverSnap = null; // rydd forhåndsvisning når modus slås av
   const btn = document.getElementById('sk-add-post-btn');
   if(btn){
     btn.style.background = SK.addPostMode ? 'var(--ngreen)' : 'rgba(255,255,255,.15)';
@@ -4768,8 +4767,20 @@ function sketchExpandIfNeeded(snap){
 function sketchDraw(hov){
   const cv  = document.getElementById('sketch-cv');
   if(!cv.width) return;
-  const ctx = cv.getContext('2d');
   const dpr = devicePixelRatio;
+  // Synkroniser canvas' interne oppløsning med faktisk visnings-størrelse
+  // ved HVER tegning, ikke bare én gang i sketchInit() ved åpning. Uten
+  // dette kan canvas-elementets CSS-boks (bestemt av nettleserens layout,
+  // som kan endre seg etter at overlayen åpnes) komme ut av synk med
+  // cv.width/height — og når det skjer, strekker nettleseren det
+  // kvadratisk TEGNEDE rutenettet til en rektangel-form ved VISNING, selv
+  // om selve koden under tegner et fullstendig kvadratisk rutenett.
+  const rect = cv.getBoundingClientRect();
+  const wantW = Math.round(rect.width * dpr), wantH = Math.round(rect.height * dpr);
+  if(rect.width > 0 && rect.height > 0 && (cv.width !== wantW || cv.height !== wantH)){
+    cv.width = wantW; cv.height = wantH;
+  }
+  const ctx = cv.getContext('2d');
   const W2  = cv.width/dpr, H2 = cv.height/dpr;
   ctx.save(); ctx.scale(dpr,dpr);
   ctx.fillStyle='#f4f6f8'; ctx.fillRect(0,0,W2,H2);
@@ -4844,9 +4855,20 @@ function sketchDraw(hov){
     const pa=w2p(pts[pts.length-1].x,pts[pts.length-1].y);
     const pb=w2p(snap.x,snap.y);
     const segLenM=Math.sqrt((snap.x-pts[pts.length-1].x)**2+(snap.y-pts[pts.length-1].y)**2);
-    ctx.beginPath(); ctx.setLineDash([4,3]);
+    const previewNoRail = SK.currentLineType==='normal';
+    ctx.beginPath();
+    // Stiplingen her betydde tidligere kun "ikke plassert ennå" — men siden
+    // "ingen rekkverk"-kanter OGSÅ tegnes stiplet (se Segments-løkken over),
+    // så forhåndsvisningen alltid ut som "ingen rekkverk", uansett hvilken
+    // linjetype som faktisk var valgt. Kanten ble først riktig (heltrukket)
+    // idet du klikket — det er trolig det som oppleves som "byttet om".
+    // Forhåndsvisningen matcher nå alltid det faktiske resultatet: stiplet
+    // grå for "vanlig linje" (ingen rekkverk), tettere stiplet blå for
+    // "rekkverkslinje" (fortsatt tydelig markert som "ikke plassert ennå").
+    ctx.setLineDash(previewNoRail?[6,4]:[3,2]);
     const segOk=segLenM>=SK.MIN_SEG||segLenM<0.001;
-    ctx.strokeStyle=segOk?'rgba(45,97,124,.6)':'rgba(192,57,43,.6)'; ctx.lineWidth=1.8;
+    ctx.strokeStyle=!segOk?'rgba(192,57,43,.6)':(previewNoRail?'rgba(154,160,168,.8)':'rgba(45,97,124,.75)');
+    ctx.lineWidth=previewNoRail?1.8:2.2;
     ctx.moveTo(pa.px,pa.py); ctx.lineTo(pb.px,pb.py); ctx.stroke(); ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(pb.px,pb.py,4,0,Math.PI*2);
     ctx.fillStyle='#f19d0d'; ctx.fill();
@@ -4876,18 +4898,61 @@ function sketchDraw(hov){
     }
   });
 
-  // Søyler — kun når formen er lukket og "Med søyler" er valgt. SK.posts
-  // materialiseres (auto-beregnes) første gang dette vises for gjeldende
-  // tegneøkt; brukeren kan deretter fjerne enkeltsøyler eller legge til
-  // egendefinerte via klikk-håndtereren (se der).
+  // Søyler — kun VISNING her, bruker en lokal variabel i stedet for å
+  // sette SK.posts. BUG (fikset): denne satte tidligere SK.posts hver
+  // gang søyler ble VIST — ikke bare når brukeren faktisk redigerte dem —
+  // så bare det å åpne skisseverktøyet og redigere rekkverk (eller noe
+  // helt annet) mens "Med søyler" var på, låste søyleavstanden til
+  // hva W.span tilfeldigvis var akkurat da, og senere endring av
+  // avstand-innstillingen sluttet å ha noen effekt. SK.posts skal KUN
+  // materialiseres av selve legg-til/fjern-søyle-håndteringen (se klikk-
+  // håndtereren), aldri av ren visning.
   if(SK.closed && pts.length>=3 && W.bearing==='posts'){
-    if(!SK.posts) SK.posts = _computeDefaultSketchPosts(pts, W.span/100);
-    SK.posts.forEach(p=>{
+    const displayPosts = SK.posts || _computeDefaultSketchPosts(pts, W.span/100);
+    displayPosts.forEach(p=>{
       const pp=w2p(p.x,p.y);
       ctx.beginPath(); ctx.arc(pp.px,pp.py,5,0,Math.PI*2);
       ctx.fillStyle='#c0392b'; ctx.fill();
       ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
     });
+    // Forhåndsvisning av NESTE søyle i legg-til-modus. Tre visningstyper,
+    // høyeste prioritet først: midtpunkt-snap (grønn diamant — lokal,
+    // presis referanse), ortho-tracking mot X/Y (gyllen guide-linje, som
+    // for polygon-punkter), eller vanlig kant-snap (rød prikk). I tillegg
+    // vises alltid mål til nærmeste eksisterende søyle, uansett snap-type.
+    // Se _snapPostToEdgeAndPosts() og mousemove-håndtereren.
+    if(SK.addPostMode && SK._postHoverSnap){
+      const hs = SK._postHoverSnap;
+      const pp=w2p(hs.x,hs.y);
+      if(hs.isMidpoint){
+        ctx.save();
+        ctx.translate(pp.px,pp.py); ctx.rotate(Math.PI/4);
+        ctx.fillStyle='#2e8b57'; ctx.strokeStyle='#fff'; ctx.lineWidth=1.5;
+        ctx.fillRect(-5,-5,10,10); ctx.strokeRect(-5,-5,10,10);
+        ctx.restore();
+      } else if(hs.alignX || hs.alignY){
+        drawAlignmentGuides(ctx, hs, hs.alignX, hs.alignY, W2, H2);
+      } else {
+        ctx.beginPath(); ctx.arc(pp.px,pp.py,5,0,Math.PI*2);
+        ctx.fillStyle='rgba(192,57,43,.5)'; ctx.fill();
+        ctx.strokeStyle='#c0392b'; ctx.lineWidth=1.5; ctx.stroke();
+      }
+      if(hs.nearestPost && hs.nearestDist < Infinity){
+        const np=w2p(hs.nearestPost.x, hs.nearestPost.y);
+        ctx.save();
+        ctx.setLineDash([4,3]);
+        ctx.strokeStyle='rgba(46,139,87,.7)'; ctx.lineWidth=1.2;
+        ctx.beginPath(); ctx.moveTo(pp.px,pp.py); ctx.lineTo(np.px,np.py); ctx.stroke();
+        ctx.setLineDash([]);
+        const mx=(pp.px+np.px)/2, my=(pp.py+np.py)/2;
+        const lbl=Math.round(hs.nearestDist*1000)+' mm';
+        ctx.font='bold 10px Barlow,sans-serif'; ctx.textAlign='center';
+        ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fillRect(mx-24,my-9,48,15);
+        ctx.strokeStyle='#2e8b57'; ctx.lineWidth=1; ctx.strokeRect(mx-24,my-9,48,15);
+        ctx.fillStyle='#1a3a2c'; ctx.fillText(lbl,mx,my+2);
+        ctx.restore();
+      }
+    }
   }
 
   // Update sidebar
@@ -4953,6 +5018,136 @@ function sketchRemovePt(i){
 }
 
 // Canvas interactions
+// Ortho-tracking mot EKSISTERENDE søyler — kun brukt i "legg til søyle"-
+// modus. Finner først nærmeste punkt på nærmeste kant (søyler skal alltid
+// sitte på konturen), men justerer det ALONG kanten for å matche en
+// eksisterende søyles X eller Y dersom den er nær nok — samme prinsipp og
+// terskel (SK_ALIGN_THRESH_PX) som alignmentSnap() bruker for polygon-
+// punkter, bare mot søyler i stedet for punkter. Løser generelt via kant-
+// parameteren t, så det fungerer selv om kanten ikke er akse-rettet.
+function _snapPostToEdgeAndPosts(worldPx, worldPy, points, posts){
+  const fullPts=[...points, points[0]];
+  let bestD=Infinity, bestX=null, bestY=null, edgeA=null, edgeB=null;
+  for(let i=0;i<fullPts.length-1;i++){
+    const a=fullPts[i], b=fullPts[i+1];
+    const pa=w2p(a.x,a.y), pb=w2p(b.x,b.y);
+    const dx=pb.px-pa.px, dy=pb.py-pa.py;
+    const lenSq=dx*dx+dy*dy;
+    let t = lenSq>0 ? ((worldPx-pa.px)*dx+(worldPy-pa.py)*dy)/lenSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    const px=pa.px+t*dx, py=pa.py+t*dy;
+    const d=Math.sqrt((worldPx-px)**2+(worldPy-py)**2);
+    if(d<bestD){ bestD=d; bestX=a.x+(b.x-a.x)*t; bestY=a.y+(b.y-a.y)*t; edgeA=a; edgeB=b; }
+  }
+  if(edgeA===null) return { x: bestX, y: bestY, alignX:null, alignY:null, isMidpoint:false };
+
+  // Rutenett-snap til nærmeste 50mm — gjør det enkelt å plassere søylen på
+  // et rundt tall (f.eks. 2500mm, ikke 2483mm), i stedet for en tilfeldig
+  // desimalposisjon der musepekeren akkurat traff kanten. Dette er
+  // GRUNNLAGET posisjonen bygges videre på — midtpunkt- og ortho-snap
+  // under kan fortsatt overstyre denne dersom de treffer nærmere.
+  const POST_GRID = 0.05; // 50mm
+  {
+    const edgeDXg=edgeB.x-edgeA.x, edgeDYg=edgeB.y-edgeA.y;
+    if(Math.abs(edgeDYg) < 1e-6){
+      // Horisontal kant — X er den frie aksen
+      bestX = Math.round(bestX/POST_GRID)*POST_GRID;
+      bestY = edgeA.y;
+    } else if(Math.abs(edgeDXg) < 1e-6){
+      // Vertikal kant — Y er den frie aksen
+      bestY = Math.round(bestY/POST_GRID)*POST_GRID;
+      bestX = edgeA.x;
+    } else {
+      // Skrå kant (sjeldent i praksis) — rund av avstanden langs kanten fra A
+      const edgeLenG=Math.sqrt(edgeDXg*edgeDXg+edgeDYg*edgeDYg);
+      const distAlong=Math.sqrt((bestX-edgeA.x)**2+(bestY-edgeA.y)**2);
+      const snappedDist=Math.round(distAlong/POST_GRID)*POST_GRID;
+      const tG=edgeLenG>1e-6?Math.max(0,Math.min(1,snappedDist/edgeLenG)):0;
+      bestX=edgeA.x+edgeDXg*tG; bestY=edgeA.y+edgeDYg*tG;
+    }
+  }
+
+  const dpr = devicePixelRatio;
+  const threshWorld = SK_ALIGN_THRESH_PX / (SK.scale * dpr);
+  const edgeDX=edgeB.x-edgeA.x, edgeDY=edgeB.y-edgeA.y;
+  const edgeLen=Math.sqrt(edgeDX*edgeDX+edgeDY*edgeDY);
+
+  // Midtpunkt-snap — to typer, sjekket sammen:
+  // 1) Mellom to naboliggende referanser (søyler ELLER kant-endepunktene)
+  //    PÅ SAMME kant som nå — for jevn halvering langs én strekning.
+  // 2) Mellom et VILKÅRLIG par søyler, uansett hvilken kant de opprinnelig
+  //    hører til — men KUN hvis selve midtpunktet faktisk havner nær DENNE
+  //    kanten (en søyle må jo sitte på konturen). Dekker f.eks. en
+  //    mellomarm i et forgrenet system, der en søyle der naturlig havner
+  //    midt mellom to søyler på ytterarmene.
+  // Prioriteres over X/Y-ortho under, siden det er en mer presis referanse.
+  let isMidpoint=false;
+  if(edgeLen>1e-6){
+    const candidates=[]; // {x,y,dPx} — kandidat-midtpunkter nær nok klikket
+    const tRefs=[0,1]; // kant-endepunktene teller alltid som referanser
+    posts.forEach(p=>{
+      const t=((p.x-edgeA.x)*edgeDX+(p.y-edgeA.y)*edgeDY)/(edgeLen*edgeLen);
+      if(t<-0.02||t>1.02) return; // søylen hører ikke til denne kanten
+      const onX=edgeA.x+edgeDX*t, onY=edgeA.y+edgeDY*t;
+      const distWorld=Math.sqrt((p.x-onX)**2+(p.y-onY)**2);
+      if(distWorld < threshWorld*2) tRefs.push(Math.max(0,Math.min(1,t)));
+    });
+    tRefs.sort((a,b)=>a-b);
+    for(let i=0;i<tRefs.length-1;i++){
+      const midT=(tRefs[i]+tRefs[i+1])/2;
+      candidates.push({ x: edgeA.x+edgeDX*midT, y: edgeA.y+edgeDY*midT });
+    }
+    // Vilkårlige par (uansett kant) — kun de hvor midtpunktet faktisk
+    // ligger nær denne kantlinja.
+    for(let i=0;i<posts.length;i++){
+      for(let j=i+1;j<posts.length;j++){
+        const midX=(posts[i].x+posts[j].x)/2, midY=(posts[i].y+posts[j].y)/2;
+        const t=((midX-edgeA.x)*edgeDX+(midY-edgeA.y)*edgeDY)/(edgeLen*edgeLen);
+        if(t<-0.02||t>1.02) continue;
+        const onX=edgeA.x+edgeDX*Math.max(0,Math.min(1,t)), onY=edgeA.y+edgeDY*Math.max(0,Math.min(1,t));
+        const distWorld=Math.sqrt((midX-onX)**2+(midY-onY)**2);
+        if(distWorld < threshWorld) candidates.push({ x: onX, y: onY });
+      }
+    }
+    let bestMidD=SK_ALIGN_THRESH_PX*1.2;
+    candidates.forEach(c=>{
+      const cp=w2p(c.x,c.y);
+      const d=Math.sqrt((worldPx-cp.px)**2+(worldPy-cp.py)**2);
+      if(d<bestMidD){ bestMidD=d; bestX=c.x; bestY=c.y; isMidpoint=true; }
+    });
+  }
+
+  let alignX=null, alignY=null, finalX=bestX, finalY=bestY;
+  if(!isMidpoint){
+    let snapPostX=null, snapPostY=null, bestDx=threshWorld, bestDy=threshWorld;
+    posts.forEach(p=>{
+      const dx=Math.abs(bestX-p.x), dy=Math.abs(bestY-p.y);
+      if(dx<bestDx){ bestDx=dx; snapPostX=p; }
+      if(dy<bestDy){ bestDy=dy; snapPostY=p; }
+    });
+    if(snapPostX && Math.abs(edgeDX)>1e-6){
+      let t2=(snapPostX.x-edgeA.x)/edgeDX;
+      t2=Math.max(0,Math.min(1,t2));
+      finalX=edgeA.x+edgeDX*t2; finalY=edgeA.y+edgeDY*t2;
+      alignX=snapPostX;
+    } else if(snapPostY && Math.abs(edgeDY)>1e-6){
+      let t2=(snapPostY.y-edgeA.y)/edgeDY;
+      t2=Math.max(0,Math.min(1,t2));
+      finalX=edgeA.x+edgeDX*t2; finalY=edgeA.y+edgeDY*t2;
+      alignY=snapPostY;
+    }
+  }
+  // Avstand og retning til nærmeste eksisterende søyle — brukes til å vise
+  // et mål-merke ("XXXXmm") ved siden av forhåndsvisningen, slik at man ser
+  // avstanden til naboen mens man plasserer, ikke bare etterpå.
+  let nearestPost=null, nearestDist=Infinity;
+  posts.forEach(p=>{
+    const d=Math.sqrt((finalX-p.x)**2+(finalY-p.y)**2);
+    if(d<nearestDist){ nearestDist=d; nearestPost=p; }
+  });
+  return { x: finalX, y: finalY, alignX, alignY, isMidpoint, nearestPost, nearestDist };
+}
+
 document.getElementById('sketch-cv').addEventListener('mousemove',function(e){
   if(SK._panning){
     // Panorering: flytt origo (SK.ox/oy) tilsvarende musebevegelsen siden
@@ -4970,7 +5165,19 @@ document.getElementById('sketch-cv').addEventListener('mousemove',function(e){
     sketchDraw();
     return;
   }
-  if(SK.closed) return;
+  if(SK.closed){
+    // Ortho-tracking mot eksisterende søyler — kun i legg-til-søyle-modus.
+    if(SK.addPostMode && W.bearing==='posts'){
+      const rect=this.getBoundingClientRect();
+      const scaleX=this.width/devicePixelRatio/rect.width;
+      const scaleY=this.height/devicePixelRatio/rect.height;
+      const hoverPx=(e.clientX-rect.left)*scaleX, hoverPy=(e.clientY-rect.top)*scaleY;
+      const displayPosts = SK.posts || _computeDefaultSketchPosts(SK.points, W.span/100);
+      SK._postHoverSnap = _snapPostToEdgeAndPosts(hoverPx, hoverPy, SK.points, displayPosts);
+      sketchDraw();
+    }
+    return;
+  }
   const raw=sketchCursorPos(e);
   let snap = raw;
   if(SK.points.length > 0){
@@ -5047,23 +5254,32 @@ document.getElementById('sketch-cv').addEventListener('click',function(e){
     // Legg-til-søyle-modus har høyeste prioritet: klikket her betyr
     // uttrykkelig "legg til en søyle akkurat her", uansett hva som
     // ellers ligger nærmest. Slår seg selv av etter bruk (engangs-modus).
+    // Bruker SAMME snap-funksjon som hover-forhåndsvisningen (kant-snap +
+    // ortho-tracking mot eksisterende søyler), slik at det du ser er
+    // nøyaktig det du får.
     if(SK.addPostMode && W.bearing==='posts'){
       if(!SK.posts) SK.posts = _computeDefaultSketchPosts(SK.points, W.span/100);
-      const world = p2w(clickPx, clickPy);
-      SK.posts.push({x: world.x, y: world.y});
+      const snapped = _snapPostToEdgeAndPosts(clickPx, clickPy, SK.points, SK.posts);
+      SK.posts.push({x: snapped.x, y: snapped.y});
+      SK._postHoverSnap = null;
       sketchToggleAddPostMode(); // av igjen etter ett klikk
       sketchDraw();
       return;
     }
-    // Deretter: klikk nær en EKSISTERENDE søyle fjerner den.
-    if(W.bearing==='posts' && SK.posts && SK.posts.length){
+    // Deretter: klikk nær en EKSISTERENDE søyle fjerner den. Sjekker mot
+    // en LOKAL liste (auto-beregnet hvis ikke tilpasset ennå) — SK.posts
+    // materialiseres kun HVIS et treff faktisk fjernes, aldri bare av å
+    // sjekke/vise (samme fiks som visningen over).
+    if(W.bearing==='posts'){
+      const checkPosts = SK.posts || _computeDefaultSketchPosts(SK.points, W.span/100);
       let bestPostDist=14, bestPostI=-1;
-      SK.posts.forEach((p,i)=>{
+      checkPosts.forEach((p,i)=>{
         const pp=w2p(p.x,p.y);
         const d=Math.sqrt((clickPx-pp.px)**2+(clickPy-pp.py)**2);
         if(d<bestPostDist){bestPostDist=d;bestPostI=i;}
       });
       if(bestPostI>=0){
+        if(!SK.posts) SK.posts = checkPosts.map(p=>({...p}));
         SK.posts.splice(bestPostI,1);
         sketchDraw();
         return;
@@ -5192,7 +5408,7 @@ function sketchApply(){
   // Kopier evt. tilpasset søyleplassering — null betyr "ikke tilpasset",
   // så buildWalk() beregner automatisk plassering som før (se
   // _getSketchPostPositions).
-  W.sketchPosts = SK.posts ? SK.posts.map(p=>({x:p.x,y:p.y})) : null;
+  W.sketchPosts = SK.posts ? SK.posts.map(p=>({...p})) : null;
   // Close sketch and switch to 3D FIRST so Three.js canvas is visible during buildWalk
   closeSketchMode();
   setView('3d');
@@ -5234,7 +5450,7 @@ function sketchUndo(){
 function sketchClear(){
   SK.points=[];SK.closed=false;
   SK.railExcluded=new Set(); SK.currentLineType='wire';
-  SK.posts=null; SK.addPostMode=false;
+  SK.posts=null; SK.addPostMode=false; SK._postHoverSnap=null;
   sketchSetLineType('wire');
   const addBtn=document.getElementById('sk-add-post-btn');
   if(addBtn){ addBtn.style.background='rgba(255,255,255,.15)'; addBtn.style.borderColor='rgba(255,255,255,.3)'; }
