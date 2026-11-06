@@ -1533,8 +1533,18 @@ function mkMat(key, darken) {
 
 
 
+// Identiske bokser (f.eks. alle spiler og trinn) deler samme geometri: færre allokeringer ved
+// hver ombygging (slider-drag) og færre buffere som må lastes opp til GPU. Delte geometrier
+// frigis ikke i clearGrp() — de gjenbrukes ved neste bygg. Ingen kode muterer box-geometrier.
+const _boxGeoCache = new Map();
 function box(w,h,d,mat){
-  return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+  const key = w.toFixed(5)+'|'+h.toFixed(5)+'|'+d.toFixed(5);
+  let g = _boxGeoCache.get(key);
+  if(!g){
+    if(_boxGeoCache.size > 800){ _boxGeoCache.forEach(v=>v.dispose()); _boxGeoCache.clear(); } // begrens minnebruk
+    g = new THREE.BoxGeometry(w,h,d); g.userData._shared = true; _boxGeoCache.set(key, g);
+  }
+  return new THREE.Mesh(g, mat);
 }
 
 // ─── THREE SETUP ─────────────────────────────────────────
@@ -1639,7 +1649,7 @@ function clearGrp(){
   scene.remove(grp);
   // Only dispose geometry — materials are managed by _matCache
   grp.traverse(o=>{
-    if(o.geometry) o.geometry.dispose();
+    if(o.geometry && !(o.geometry.userData && o.geometry.userData._shared)) o.geometry.dispose();
     // Don't dispose material — it may be shared via _matCache
   });
   grp=null;
