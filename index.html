@@ -254,7 +254,7 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
 .sketch-toolbar{display:flex;gap:.5rem;align-items:center;}
 .sketch-body{flex:1;display:flex;overflow:hidden;}
 .sketch-canvas-wrap{flex:1;position:relative;overflow:hidden;background:#f0f2f4;}
-#sketch-cv{display:block;width:100%;height:100%;cursor:crosshair;}
+#sketch-cv,#repos-cv{display:block;width:100%;height:100%;cursor:crosshair;}
 .sketch-sidebar{width:240px;background:#fff;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;padding:1rem;gap:.8rem;flex-shrink:0;}
 .sketch-sidebar label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
 .sketch-pt-list{display:flex;flex-direction:column;gap:.3rem;font-size:.78rem;}
@@ -690,6 +690,27 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
 </noscript>
 <body>
 
+<div id="repos-overlay" class="sketch-overlay">
+  <div class="sketch-header">
+    <h2>✏ Repos — rekkverk og søyler</h2>
+    <div class="sketch-toolbar">
+      <button id="rs-add-post-btn" onclick="rsToggleAddPost()" title="Klikk her, deretter klikk langs en kant for å legge til en søyle"
+        style="padding:.3rem .6rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.75rem;cursor:pointer;margin-right:.4rem;">➕ Søyle</button>
+      <button onclick="rsResetPosts()" style="padding:.3rem .6rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.75rem;cursor:pointer;">↺ Søyler</button>
+      <button onclick="rsResetRail()" style="padding:.3rem .6rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.75rem;cursor:pointer;margin-right:.4rem;">↺ Rekkverk</button>
+      <button onclick="rsClose()" style="padding:.3rem .9rem;background:var(--ngreen);color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;">✓ Ferdig</button>
+    </div>
+  </div>
+  <div class="sketch-body">
+    <div class="sketch-canvas-wrap">
+      <canvas id="repos-cv"></canvas>
+      <div style="position:absolute;bottom:.5rem;left:.5rem;font-size:.68rem;color:#888;background:rgba(255,255,255,.85);padding:.2rem .5rem;border-radius:1rem;max-width:95%;">
+        Reposets mål og trappenes plassering endrer du med sliderne · her justerer du rekkverk (klikk en kant) og søyler (klikk for å fjerne, «➕ Søyle» for å legge til) · Høyre knapp = panorer, hjul = zoom
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="sketch-overlay" class="sketch-overlay">
   <div class="sketch-header">
     <h2>✏ Skisse — Egendefinert gangbane</h2>
@@ -757,6 +778,11 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
     <div class="wc-icon">📦</div>
     <div class="wc-title" style="color:#f19d0d;">3D Bibliotek</div>
     <div class="wc-desc">Vis materialer, komponenter og prosjekter i 3D</div>
+  </div>
+  <div id="ping-welcome-card" class="welcome-card" onclick="sendKeepAlivePing()" style="display:none;">
+    <div class="wc-icon">📡</div>
+    <div class="wc-title" style="color:#5a5a58;">Aktivitets-ping</div>
+    <div class="wc-desc">Send et lite signal til databasen for å unngå at prosjektet settes på pause pga. inaktivitet</div>
   </div>
   </div>
   <div class="welcome-footer">Du kan bytte konfigurator når som helst via menyen øverst</div>
@@ -968,7 +994,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div class="st sa">Dimensjoner</div>
         <div class="cr">
           <div class="cl"><span id="lbl-h">Høyde</span><span class="cv cvs" id="v-h">240 cm</span></div>
-          <input type="range" class="sr" id="s-h" min="150" max="600" value="240" step="5">
+          <input type="range" class="sr" id="s-h" min="50" max="600" value="240" step="5">
         </div>
         <div class="cr">
           <div class="cl"><span>Trappens bredde</span><span class="cv cvs" id="v-w">900 mm</span></div>
@@ -993,7 +1019,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div id="f2-controls" style="display:none;">
           <div class="cr">
             <div class="cl"><span>Høyde flight 2 (fra repos)</span><span class="cv cvs" id="v-h2">200 cm</span></div>
-            <input type="range" class="sr" id="s-h2" min="100" max="400" value="200" step="5">
+            <input type="range" class="sr" id="s-h2" min="50" max="400" value="200" step="5">
           </div>
           <div class="cr" id="angle-row-f2">
             <div class="cl"><span>Vinkel flight 2</span><span class="cv cvs" id="v-r2">35.0°</span></div>
@@ -1011,6 +1037,10 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
           <button class="tb" data-st="r90l">Repos 90° venstre</button>
           <button class="tb" data-st="r180">Repos 180°</button>
         </div>
+        <div class="ckr" id="platform-ckr" onclick="SC('reposPlatform')" style="margin-top:.6rem;">
+          <div class="ckb" id="sb-reposPlatform"><svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <span class="ckl">Repos/platform på toppen (rettløp)</span>
+        </div>
       </div>
 
       <div class="ss" id="repos-section" style="display:none;">
@@ -1026,7 +1056,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <!-- r90: flight position sliders -->
         <div id="r90-positions" style="display:none;">
           <div class="cr">
-            <div class="cl"><span>Flight 1 avstand fra venstre kant</span><span class="cv cvs" id="v-f1x">0 mm</span></div>
+            <div class="cl"><span id="lbl-f1x">Flight 1 avstand fra venstre kant</span><span class="cv cvs" id="v-f1x">0 mm</span></div>
             <input type="range" class="sr" id="s-f1x" min="-2000" max="2000" value="0" step="1">
             <div style="display:flex;gap:4px;margin-top:2px;">
               <button style="background:none;border:1px solid var(--border2);border-radius:4px;font-size:.68rem;color:var(--muted);padding:1px 6px;cursor:pointer;font-family:inherit;" onclick="setF1xFlush(-1)">← Flush venstre</button>
@@ -1034,7 +1064,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
             </div>
             <div style="font-size:.68rem;color:var(--muted);margin-top:.2rem;">Skyv flight 1 langs reposet. Flush = stopp.</div>
           </div>
-          <div class="cr">
+          <div class="cr" id="f2z-row">
             <div class="cl"><span>Flight 2 posisjon (Z)</span><span class="cv cvs" id="v-f2z">0 mm</span></div>
             <input type="range" class="sr" id="s-f2z" min="-2000" max="2000" value="0" step="1">
             <div style="display:flex;gap:4px;margin-top:2px;">
@@ -1060,6 +1090,11 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
         <div style="font-size:.72rem;color:var(--muted);line-height:1.5;margin-top:.4rem;">
           Breddemål måles alltid fra ytterkant til ytterkant (inkl. vanger).
         </div>
+        <button onclick="openReposSketch()" style="margin-top:.6rem;width:100%;padding:.4rem .6rem;background:#f0f7e8;border:1px solid var(--ngreen);border-radius:6px;font-size:.78rem;color:var(--ngreen);font-weight:600;cursor:pointer;font-family:'Barlow',sans-serif;">✏ Skisse: rekkverk og søyler på repos</button>
+        <div style="margin-top:.5rem;padding:.4rem .6rem;background:#f0f4f7;border-radius:5px;font-size:.7rem;color:var(--muted);line-height:1.55;">
+          💡 Reposet har søyler i alle hjørner. Klikk på en søyle i 3D-visningen for å fjerne den, eller åpne skissen for å plassere flere langs kantene.
+        </div>
+        <button onclick="resetReposLegs()" style="margin-top:.5rem;width:100%;padding:.35rem .6rem;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;font-size:.75rem;color:var(--nblue);cursor:pointer;font-family:'Barlow',sans-serif;">↺ Tilbakestill søyler</button>
       </div>
 
       <div class="ss">
@@ -1380,11 +1415,26 @@ const P = {
 };
 
 // ─── STATE ───────────────────────────────────────────────
+// Rettløp med repos/platform på toppen (S.reposPlatform) — ett løp, ingen trapp #2.
+function _isPlatform(sS){ return (sS && sS.type==='straight' && sS.reposPlatform) ? 1 : 0; }
+
+// Ekstra repos-søyle langs en kant. e: 'f' foran / 'b' bak (o måles fra venstre kant), 'l' venstre / 'r' høyre
+// (o måles fra forkanten og bakover). Posisjoner lokalt for reposet: x på tvers, y = dybde bakover fra
+// forkanten. Lagres relativt til kanten, så de følger med når reposets mål endres.
+function _reposExtraLocal(e, x1, x2, depth, inset){
+  const inset_ = inset == null ? 0.09 : inset;
+  const along = (len)=>Math.max(inset_, Math.min(len - inset_, e.o));
+  if(e.e === 'f') return { x:x1 + along(x2-x1), y:inset_ };
+  if(e.e === 'b') return { x:x1 + along(x2-x1), y:depth - inset_ };
+  if(e.e === 'l') return { x:x1 + inset_, y:along(depth) };
+  return { x:x2 - inset_, y:along(depth) };
+}
 const S = {
   heightCm:240, widthMm:900, angleDeg:35,
   f2independent:false, height2Cm:200, angle2Deg:35,
   type:'straight', mat:'alu-raw',
   handrail:true, riser:true, tek17:false, rail:'spiler', reposRail:true, nManual:null,
+  reposPlatform:false, // rettløp: repos/platform på toppen (ingen trapp #2)
   reposRailExcluded: new Set(), // set of excluded repos rail segment IDs
   flightRailExcluded: new Set()  // set of excluded flight rail segment IDs
 };
@@ -1414,7 +1464,9 @@ const REPOS = {
   dybdeMm:  0,
   f2offsetMm: 0,  // r180: flight2 X offset
   f1xMm: 0,       // r90: flight1 position along repos width (X)
-  f2zMm: 0        // r90: flight2 position along repos depth (Z)
+  f2zMm: 0,       // r90: flight2 position along repos depth (Z)
+  legsExcluded: [], // repos-søyler fjernet ved klikk (hjørne-ID-er: fl/fr/bl/br). Alltid ERSTATT arrayen, aldri mutér (shallow-kopier deler referansen)
+  extraLegs: []     // ekstra repos-søyler langs kantene: [{e:'f'|'b'|'l'|'r', o:meter fra kantens start}]. Alltid ERSTATT arrayen
 };
 
 // ── Autoritative default-state (for konfigAdd / nye configer) ──
@@ -1598,8 +1650,11 @@ function buildStair(){
   try{if(typeof LIB!=='undefined'&&LIB&&typeof LIB.isActive==='function'&&LIB.isActive())return;}catch(e){}
   clearGrp(); grp=new THREE.Group(); scene.add(grp);
 
-  const H  = S.heightCm / 100;
+  // Rettløp med platform: høyde = overflaten på platformen. Selve trappeløpet
+  // stiger derfor (høyde − dekktykkelse), og dekket legges oppå.
+  const H  = S.heightCm / 100 - _isPlatform(S) * P.NRM_H;
   const Wm = S.widthMm  / 1000;
+  window._reposRef = null; window._reposSegs = []; // fylles av repos-grenene under — brukes av repos-skissen
 
   // ── Step geometry ──
   // TRINN_W = 249.5mm = fixed physical profile depth (inntrinn is always TRINN_W).
@@ -1944,6 +1999,8 @@ function buildStair(){
   // segId: unique string for click-toggle. axis: 'X' or 'Z'. 
   // p1/p2: endpoints in world XZ. baseY: repos top Y.
    function buildReposRailSeg(segId, x1, z1, x2, z2, baseY){
+    // Registrer segmentet (også når det er fjernet) — repos-skissen viser alle og lar deg slå dem av/på
+    if(Math.hypot(x2-x1, z2-z1) >= 0.05) (window._reposSegs || (window._reposSegs = [])).push({ id:segId, x1, z1, x2, z2 });
     if(S.reposRailExcluded.has(segId)) return;
     const rMat = mkMat(S.mat);
     const railH = P.RAIL_H;
@@ -2014,10 +2071,105 @@ function buildStair(){
     }
   }
 
-  if(S.type === 'straight'){
+  // ── Repos-søyler (ben) i alle fire hjørner — felles for alle repos-typer ──
+  // Hjørne-ID-er (fl/fr/bl/br = foran/bak × venstre/høyre, sett fra trappen)
+  // lagres i REPOS.legsExcluded når man klikker en søyle bort. Søylen går fra
+  // gulv til undersiden av reposdekket (platY) — enkel boks + fotplate, samme
+  // forenklede visning som gangbane-søylene.
+  function buildReposLegs(x1, x2, zFront, zBack, platY){
+    if(!(platY > 0.05)) return;
+    const legMat = mkMat(S.mat, true);
+    // Bunnen av søylene = laveste punkt i modellen så langt (trappevangen stikker
+    // litt under y=0, og hele modellen sentreres på dette punktet etterpå) —
+    // ellers ville søylene sveve rett over gulvet. Flight 1 er alltid bygget før
+    // denne kalles. Materiallisten bruker fortsatt platY (gulv → underside repos).
+    const floorY = Math.min(0, new THREE.Box3().setFromObject(grp).min.y);
+    const legH = platY - floorY;
+    const ex = new Set(Array.isArray(REPOS.legsExcluded) ? REPOS.legsExcluded : []);
+    const inset = 0.09; // fotplata (180mm) ender flush med dekkets kant
+    const corners = [
+      ['fl', x1 + inset, zFront - inset],
+      ['fr', x2 - inset, zFront - inset],
+      ['bl', x1 + inset, zBack  + inset],
+      ['br', x2 - inset, zBack  + inset]
+    ];
+    const placeLeg = (id, px, pz) => {
+      const leg = box(P.ST_S, legH, P.ST_S, legMat);
+      leg.position.set(px, floorY + legH/2, pz);
+      leg.castShadow = true;
+      tagMesh(leg, 'reposLeg', { legId:id });
+      grp.add(leg);
+      const base = box(0.180, 0.020, 0.180, legMat);
+      base.position.set(px, floorY + 0.010, pz);
+      tagMesh(base, 'reposLeg', { legId:id });
+      grp.add(base);
+      // Usynlig, større treffflate — søylene er tynne og vanskelige å klikke
+      const hit = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, legH, 0.22),
+        new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false})
+      );
+      hit.position.set(px, floorY + legH/2, pz);
+      tagMesh(hit, 'reposLeg', { legId:id });
+      grp.add(hit);
+    };
+    corners.forEach(([id, px, pz]) => { if(!ex.has(id)) placeLeg(id, px, pz); });
+    // Ekstra søyler langs kantene (satt i repos-skissen)
+    (Array.isArray(REPOS.extraLegs) ? REPOS.extraLegs : []).forEach((e, i) => {
+      const q = _reposExtraLocal(e, x1, x2, zFront - zBack, inset);
+      placeLeg('x'+i, q.x, zFront - q.y);
+    });
+  }
+
+  if(S.type === 'straight' && !S.reposPlatform){
     buildFlight(grp, 0, 0, 0, n, sh, 0, n, true, 1, inntrinn);
     storeDims({type:'straight', H:S.heightCm/100, Wm, widthMm:S.widthMm, runLen:n*inntrinn});
     window._stair2D = { f1:{n, sh, inntrinn, sd:P.TRINN_W, H:S.heightCm/100} };
+
+  } else if(S.type === 'straight'){
+    // ── Rettløp med repos/platform på toppen (ingen trapp #2) ──
+    // Samme oppbygning som repos i 90°-typene, men uten flight 2. Trappen
+    // kommer alltid inn på framsiden (Z = reposZ) — åpningen i rekkverket
+    // er like bred som trappen. Platform-overflaten ligger på S.heightCm.
+    const rB = Math.max(Wm, (REPOS.breddeMm>0) ? REPOS.breddeMm/1000 : Wm);
+    const rD = Math.max(Wm, (REPOS.dybdeMm>0)  ? REPOS.dybdeMm/1000  : Wm);
+    const outerHalf = Wm/2 + P.VANG_W/2;
+    const maxF1x = Math.max(0, rB/2 - outerHalf);
+    const f1xOff = Math.max(-maxF1x, Math.min(maxF1x, (REPOS.f1xMm||0)/1000));
+
+    buildFlight(grp, f1xOff, 0, 0, n, sh, 0, n, false, 1, inntrinn);
+
+    const platY  = n * sh;            // underside av reposdekket
+    const reposZ = -n * inntrinn;     // repos starter der trappeløpet ender
+    const platMat = mkMat(S.mat), matDR = mkMat(S.mat, true);
+    const platDeck = box(rB, P.NRM_H, rD, platMat);
+    platDeck.position.set(0, platY + P.NRM_H/2, reposZ - rD/2);
+    tagMesh(platDeck, 'repos', { bredde: Math.round(rB*1000), dybde: Math.round(rD*1000), hoyde: Math.round((platY+P.NRM_H)*100) });
+    grp.add(platDeck);
+    for(let gr=0;gr<8;gr++){
+      const ln=box(rB+0.002,0.006,0.012,matDR);
+      ln.position.set(0, platY+P.NRM_H+0.003, reposZ - rD*(gr/7));
+      grp.add(ln);
+    }
+
+    buildReposLegs(-rB/2, rB/2, reposZ, reposZ - rD, platY);
+
+    if(S.rail !== 'open' && S.reposRail){
+      const rY = platY + P.NRM_H;
+      const hw = Wm/2;
+      const f1GapL = f1xOff - hw, f1GapR = f1xOff + hw;
+      // Framside: åpning lik trappens bredde der løpet kommer inn
+      if(f1GapL - (-rB/2) > 0.05) buildReposRailSeg('p-front-left',  -rB/2, reposZ, f1GapL, reposZ, rY);
+      if(rB/2 - f1GapR > 0.05)    buildReposRailSeg('p-front-right', f1GapR, reposZ, rB/2,  reposZ, rY);
+      // Bak, venstre og høyre: alltid rekkverk
+      buildReposRailSeg('p-back',  -rB/2, reposZ-rD, rB/2,  reposZ-rD, rY);
+      buildReposRailSeg('p-left',  -rB/2, reposZ-rD, -rB/2, reposZ,    rY);
+      buildReposRailSeg('p-right',  rB/2, reposZ-rD,  rB/2, reposZ,    rY);
+    }
+    storeDims({type:'straight', H:S.heightCm/100, Wm, widthMm:S.widthMm, runLen:n*inntrinn,
+               platform:true, rB, rD, reposZ, platY, f1xOff, reposTopY:platY+P.NRM_H});
+    window._stair2D = { f1:{n, sh, inntrinn, sd:P.TRINN_W, H:platY} };
+    window._reposRef = { x1:-rB/2, x2:rB/2, depth:rD, reposZ, front:[{a:f1xOff-Wm/2, b:f1xOff+Wm/2}], side:null,
+      flights:[{x1:f1xOff-Wm/2, x2:f1xOff+Wm/2, y1:-n*inntrinn, y2:0}] };
 
   } else if(S.type === 'r90r' || S.type === 'r90l'){
     const sign       = S.type === 'r90r' ? 1 : -1;
@@ -2049,6 +2201,8 @@ function buildStair(){
       grp.add(ln);
     }
 
+    buildReposLegs(-rB/2, rB/2, reposZ, reposZ - rD, platY);
+
     // Flight 2 Z offset — along repos depth
     const maxF2z = Math.max(0, rD/2 - outerHalf);
     const f2zOff = Math.max(-maxF2z, Math.min(maxF2z, (REPOS.f2zMm||0)/1000));
@@ -2068,6 +2222,12 @@ function buildStair(){
                f2H:f2H_r90, reposTopY:platY+P.NRM_H});
     window._stair2D = { f1:{n:half, sh, inntrinn, sd:P.TRINN_W, H:S.heightCm/200},
                         f2:{n:S.f2independent?f2n_r90-f2half_r90:half, sh:f2sh_r90, inntrinn:S.f2independent?inntrinn2:inntrinn, sd:P.TRINN_W, H:S.f2independent?S.height2Cm/100:S.heightCm/200} };
+    { const hwR = Wm/2, sideX = sign*(rB/2);
+      const yA = reposZ - (f2StartZ + hwR), yB = reposZ - (f2StartZ - hwR);
+      const f2len = f2steps * (S.f2independent ? inntrinn2 : inntrinn);
+      window._reposRef = { x1:-rB/2, x2:rB/2, depth:rD, reposZ, front:[{a:f1xOff-hwR, b:f1xOff+hwR}], side:{x:sideX, a:yA, b:yB},
+        flights:[{x1:f1xOff-hwR, x2:f1xOff+hwR, y1:-half*inntrinn, y2:0},
+                 {x1:Math.min(sideX, sideX+sign*f2len), x2:Math.max(sideX, sideX+sign*f2len), y1:yA, y2:yB}] }; }
     // Coordinate system (repos centred at X=0, front at Z=reposZ, back at Z=reposZ-rD):
     //   Flight 1: runs +Z toward repos, arrives at Z=reposZ, centered at X=f1xOff
     //             Gap on front face: X=[f1xOff-Wm/2 .. f1xOff+Wm/2]
@@ -2159,6 +2319,8 @@ function buildStair(){
       grp.add(ln);
     }
 
+    buildReposLegs(reposX1, reposX2, reposZFront, reposZFront - reposDepth, platY);
+
     if(S.rail !== 'open' && S.reposRail){
       const rY       = platY + P.NRM_H;
       const hw       = Wm/2;
@@ -2194,6 +2356,9 @@ function buildStair(){
                f2H:(S.f2independent?S.height2Cm:S.heightCm)/100,
                reposTopY:platY+P.NRM_H});
     window._stair2D = { f1:{n:half, sh, inntrinn, sd:P.TRINN_W, H:S.heightCm/200}, f2:{n:S.f2independent?f2steps180:half, sh:f2riser180, inntrinn:S.f2independent?inntrinn2:inntrinn, sd:P.TRINN_W, H:S.f2independent?S.height2Cm/100:S.heightCm/200} };
+    { const hwR = Wm/2, g1 = {a:f1x180Off-hwR, b:f1x180Off+hwR}, g2 = {a:f2cx-hwR, b:f2cx+hwR};
+      window._reposRef = { x1:reposX1, x2:reposX2, depth:reposDepth, reposZ:reposZFront, front:[g1,g2].sort((u,v)=>u.a-v.a), side:null,
+        flights:[{x1:g1.a, x2:g1.b, y1:-f1Run, y2:0}, {x1:g2.a, x2:g2.b, y1:-f2steps180*(S.f2independent?inntrinn2:inntrinn), y2:0}] }; }
   }
 
   // Center model and aim camera
@@ -2796,7 +2961,7 @@ document.getElementById('s-h').addEventListener('input',function(){
 });
 document.getElementById('s-w').addEventListener('input',function(){
   S.widthMm=+this.value; document.getElementById('v-w').textContent=this.value+' mm';
-  if(S.type!=='straight'){
+  if(S.type!=='straight' || _isPlatform(S)){
     if(S.type==='r180'){ updateF2xMax(); updateF1x180Max(); }
     const minB = S.type==='r180' ? getMinReposBreddeMm() : S.widthMm;
     const rb = document.getElementById('s-rb');
@@ -2864,18 +3029,287 @@ document.getElementById('s-r2').addEventListener('input',function(){
   buildStair();
 });
 
+// Synker alle repos-relaterte paneler (reposmål, posisjon, rekkverk, platform-avkrysning)
+// med S.type/S.reposPlatform. Eneste sted som styrer disse — kalles fra type-knapper,
+// platform-avkrysning og syncDOMFromState (config-bytte/lasting).
+function _refreshReposUI(){
+  const isR  = S.type!=='straight';      // 90°/180° — har trapp #2
+  const plat = !!_isPlatform(S);         // rettløp med platform
+  const show = isR || plat;
+  const setD = (id,v)=>{ const el=document.getElementById(id); if(el) el.style.display=v; };
+  setD('f2-section',          isR ? 'block' : 'none');
+  setD('repos-section',       show ? 'block' : 'none');
+  setD('repos-rail-row-inner',show ? 'block' : 'none');
+  setD('r180-positions',      S.type==='r180' ? 'block' : 'none');
+  setD('r90-positions',       (S.type==='r90r'||S.type==='r90l'||plat) ? 'block' : 'none');
+  setD('f2z-row',             plat ? 'none' : '');
+  setD('platform-ckr',        S.type==='straight' ? '' : 'none');
+  const lbl = document.getElementById('lbl-f1x');
+  if(lbl) lbl.textContent = plat ? 'Trappens avstand fra venstre kant' : 'Flight 1 avstand fra venstre kant';
+  const bx = document.getElementById('sb-reposPlatform');
+  if(bx) bx.classList.toggle('cbs', plat);
+}
+function resetReposLegs(){
+  REPOS.legsExcluded = [];
+  REPOS.extraLegs = [];
+  buildStair();
+  showToast('↺ Søyler tilbakestilt');
+}
+
+// ─── REPOS-SKISSE: rekkverk og søyler ────────────────────────────────
+// Lett 2D-visning ovenfra av reposet (rektangelet fra sliderne). Her slår du rekkverk på/av per
+// kant og plasserer søyler langs kantene. Endringene brukes med én gang (S.reposRailExcluded,
+// REPOS.legsExcluded, REPOS.extraLegs). Koordinater i meter: x på tvers, y = dybde bakover fra
+// forkanten (opp på skjermen). Referansegeometri kommer fra buildStair() (_reposRef/_reposSegs).
+const RS = { addPost:false, scale:100, ox:60, oy:400, GRID:0.05, hover:null, _panning:false, _panStart:null, _panOrigin:null };
+const RS_INSET = 0.09;
+
+function rsW2P(x,y){ return { px: RS.ox + x*RS.scale, py: RS.oy - y*RS.scale }; }
+function rsP2W(px,py){ return { x:(px-RS.ox)/RS.scale, y:(RS.oy-py)/RS.scale }; }
+function rsCanvasPos(e){
+  const cv = document.getElementById('repos-cv'), rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const sx = rect.width  ? (cv.width /dpr)/rect.width  : 1;
+  const sy = rect.height ? (cv.height/dpr)/rect.height : 1;
+  const t = e.touches ? e.touches[0] : e;
+  return { px:(t.clientX-rect.left)*sx, py:(t.clientY-rect.top)*sy };
+}
+// Rekkverkssegmenter i lokale koordinater
+function rsSegs(){
+  const r = window._reposRef; if(!r) return [];
+  return (window._reposSegs || []).map(s=>({ id:s.id, x1:s.x1, y1:r.reposZ - s.z1, x2:s.x2, y2:r.reposZ - s.z2 }));
+}
+// Alle søyler (hjørner som ikke er fjernet + ekstra), med lokal posisjon
+function rsPosts(){
+  const r = window._reposRef; if(!r) return [];
+  const i = RS_INSET, ex = new Set(Array.isArray(REPOS.legsExcluded) ? REPOS.legsExcluded : []);
+  const out = [];
+  [['fl', r.x1+i, i], ['fr', r.x2-i, i], ['bl', r.x1+i, r.depth-i], ['br', r.x2-i, r.depth-i]]
+    .forEach(([id,x,y])=>{ if(!ex.has(id)) out.push({ id, x, y }); });
+  (Array.isArray(REPOS.extraLegs) ? REPOS.extraLegs : []).forEach((e,k)=>{
+    const q = _reposExtraLocal(e, r.x1, r.x2, r.depth, i); out.push({ id:'x'+k, x:q.x, y:q.y, extra:true });
+  });
+  return out;
+}
+// Nærmeste av de fire kantene på rektangelet (ikke i en trappeåpning-sjekk — det gjøres under)
+function rsNearestEdge(p){
+  const r = window._reposRef; if(!r) return null;
+  const c = [
+    { e:'f', d:Math.abs(p.y),            len:r.x2-r.x1, o:p.x-r.x1 },
+    { e:'b', d:Math.abs(p.y-r.depth),    len:r.x2-r.x1, o:p.x-r.x1 },
+    { e:'l', d:Math.abs(p.x-r.x1),       len:r.depth,   o:p.y },
+    { e:'r', d:Math.abs(p.x-r.x2),       len:r.depth,   o:p.y }
+  ].filter(q=> q.o > -0.15 && q.o < q.len + 0.15).sort((a,b)=>a.d-b.d);
+  return c[0] || null;
+}
+// Er posisjonen (langs kanten) inne i en trappeåpning? (søylas halve bredde + litt klaring)
+function rsInOpening(e, o){
+  const r = window._reposRef, m = RS_INSET;
+  if(e === 'f') return (r.front||[]).some(g=> (r.x1+o) > g.a - m && (r.x1+o) < g.b + m);
+  if(r.side && ((e==='r' && r.side.x > 0) || (e==='l' && r.side.x < 0))){
+    const lo = Math.min(r.side.a, r.side.b), hi = Math.max(r.side.a, r.side.b); return o > lo - m && o < hi + m;
+  }
+  return false;
+}
+// Søyleposisjon langs en kant, målt som o fra kantens start
+function rsPostOnEdge(e, p){
+  const r = window._reposRef;
+  return (e==='f' || e==='b') ? p.x - r.x1 : p.y;
+}
+function rsEdgePosts(e){
+  const r = window._reposRef, i = RS_INSET;
+  return rsPosts().filter(p=>{
+    if(p.extra) return (REPOS.extraLegs[+p.id.slice(1)] || {}).e === e;
+    if(e==='f') return p.y < r.depth/2 && Math.abs(p.y-i) < 1e-6;
+    if(e==='b') return Math.abs(p.y-(r.depth-i)) < 1e-6;
+    if(e==='l') return Math.abs(p.x-(r.x1+i)) < 1e-6;
+    return Math.abs(p.x-(r.x2-i)) < 1e-6;
+  }).map(p=>rsPostOnEdge(e,p)).sort((a,b)=>a-b);
+}
+// Søyle-snap: midtpunkt mellom to naboer → 50 mm-steg langs kanten
+function rsSnapPost(raw){
+  const r = window._reposRef; if(!r) return null;
+  const q = rsNearestEdge(raw); if(!q) return null;
+  const lo = RS_INSET, hi = q.len - RS_INSET;
+  let o = Math.max(lo, Math.min(hi, q.o)), kind = 'edge';
+  const ps = rsEdgePosts(q.e), pts = [lo, ...ps, hi];
+  const thr = 12/RS.scale;
+  for(let k=0;k<ps.length-1;k++){ const m = (ps[k]+ps[k+1])/2; if(Math.abs(m - q.o) < thr){ o = m; kind = 'mid'; break; } }
+  if(kind === 'edge') o = Math.max(lo, Math.min(hi, Math.round(o/RS.GRID)*RS.GRID));
+  const tooClose = rsPosts().some(p=>{ const loc = rsPostOnEdge(q.e,p); const onEdge = rsEdgePosts(q.e).includes(loc); return onEdge && Math.abs(loc - o) < 0.12; });
+  const blocked = rsInOpening(q.e, o) || tooClose;
+  const pos = _reposExtraLocal({ e:q.e, o }, r.x1, r.x2, r.depth, RS_INSET);
+  return { e:q.e, o:+o.toFixed(4), x:pos.x, y:pos.y, kind, blocked, reason: rsInOpening(q.e,o) ? 'Ikke i trappeåpningen' : (tooClose ? 'For nær en annen søyle' : '') };
+}
+
+function rsSetBtn(){
+  const b = document.getElementById('rs-add-post-btn'); if(!b) return;
+  b.style.background  = RS.addPost ? 'var(--ngreen)' : 'rgba(255,255,255,.15)';
+  b.style.borderColor = RS.addPost ? 'var(--ngreen)' : 'rgba(255,255,255,.3)';
+}
+function rsToggleAddPost(){ RS.addPost = !RS.addPost; RS.hover = null; rsSetBtn(); rsDraw(); }
+function rsApply(){ buildStair(); rsDraw(); }
+function rsResetPosts(){ REPOS.legsExcluded = []; REPOS.extraLegs = []; rsApply(); showToast('↺ Søyler tilbakestilt'); }
+function rsResetRail(){ S.reposRailExcluded = new Set(); rsApply(); showToast('↺ Rekkverk på repos tilbakestilt'); }
+
+function rsHandleClick(px, py){
+  const raw = rsP2W(px, py);
+  if(RS.addPost){
+    const sn = rsSnapPost(raw);
+    if(sn && !sn.blocked){ REPOS.extraLegs = [...(Array.isArray(REPOS.extraLegs) ? REPOS.extraLegs : []), { e:sn.e, o:sn.o }]; RS.addPost = false; RS.hover = null; rsSetBtn(); rsApply(); }
+    else if(sn){ showToast('⚠ '+sn.reason); }
+    return;
+  }
+  let bi = null, bd = 12;                              // klikk på søyle → fjern
+  rsPosts().forEach(p=>{ const pp = rsW2P(p.x,p.y), d = Math.hypot(px-pp.px, py-pp.py); if(d < bd){ bd = d; bi = p; } });
+  if(bi){
+    if(bi.extra) REPOS.extraLegs = REPOS.extraLegs.filter((_,i)=>i!==+bi.id.slice(1));
+    else REPOS.legsExcluded = [...(Array.isArray(REPOS.legsExcluded) ? REPOS.legsExcluded : []), bi.id];
+    rsApply(); return;
+  }
+  let bs = null; bd = 9;                               // klikk på rekkverk → av/på
+  rsSegs().forEach(s=>{
+    const a = rsW2P(s.x1,s.y1), b = rsW2P(s.x2,s.y2), dx = b.px-a.px, dy = b.py-a.py, L2 = dx*dx+dy*dy || 1;
+    const t = Math.max(0, Math.min(1, ((px-a.px)*dx + (py-a.py)*dy)/L2));
+    const d = Math.hypot(px-(a.px+t*dx), py-(a.py+t*dy));
+    if(d < bd){ bd = d; bs = s; }
+  });
+  if(bs){
+    const ex = new Set(S.reposRailExcluded);
+    if(ex.has(bs.id)) ex.delete(bs.id); else ex.add(bs.id);
+    S.reposRailExcluded = ex; rsApply();
+  }
+}
+
+function rsFit(){
+  const cv = document.getElementById('repos-cv'), dpr = window.devicePixelRatio || 1;
+  const W2 = (cv.width/dpr) || 700, H2 = (cv.height/dpr) || 500, r = window._reposRef;
+  const pts = r ? [{x:r.x1,y:0},{x:r.x2,y:r.depth}] : [{x:-1,y:-0.5},{x:1,y:1.5}];
+  if(r) (r.flights||[]).forEach(f=>{ pts.push({x:f.x1,y:f.y1},{x:f.x2,y:f.y2}); });
+  const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
+  const minx=Math.min(...xs), maxx=Math.max(...xs), miny=Math.min(...ys), maxy=Math.max(...ys);
+  const w = Math.max(maxx-minx, 0.5), h = Math.max(maxy-miny, 0.5);
+  RS.scale = Math.max(8, Math.min((W2-200)/w, (H2-200)/h));
+  RS.ox = (W2 - w*RS.scale)/2 - minx*RS.scale;
+  RS.oy = H2 - (H2 - h*RS.scale)/2 + miny*RS.scale;
+}
+function rsInit(){
+  const cv = document.getElementById('repos-cv'), wrap = cv.parentElement, dpr = window.devicePixelRatio || 1;
+  const W2 = wrap.offsetWidth || 700, H2 = wrap.offsetHeight || 500;
+  cv.width = W2*dpr; cv.height = H2*dpr; cv.style.width = W2+'px'; cv.style.height = H2+'px';
+  rsFit(); rsDraw();
+}
+function openReposSketch(){
+  if(!window._reposRef){ showToast('⚠ Velg en trapp med repos først'); return; }
+  RS.addPost = false; RS.hover = null; rsSetBtn();
+  document.getElementById('repos-overlay').classList.add('open');
+  setTimeout(rsInit, 60);
+}
+function rsClose(){ document.getElementById('repos-overlay').classList.remove('open'); }
+
+function rsDraw(){
+  const cv = document.getElementById('repos-cv'); if(!cv) return;
+  const ctx = cv.getContext('2d'), dpr = window.devicePixelRatio || 1, Wc = cv.width/dpr, Hc = cv.height/dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,Wc,Hc);
+  const x0 = rsP2W(0,0).x, x1 = rsP2W(Wc,0).x, y1 = rsP2W(0,0).y, y0 = rsP2W(0,Hc).y;
+  ctx.lineWidth = 1;
+  if(RS.scale >= 60){ ctx.strokeStyle = '#e6eaee'; ctx.beginPath();
+    for(let x=Math.floor(x0/0.1)*0.1; x<=x1; x+=0.1){ const p=rsW2P(x,0); ctx.moveTo(p.px,0); ctx.lineTo(p.px,Hc); }
+    for(let y=Math.floor(y0/0.1)*0.1; y<=y1; y+=0.1){ const p=rsW2P(0,y); ctx.moveTo(0,p.py); ctx.lineTo(Wc,p.py); }
+    ctx.stroke(); }
+  ctx.strokeStyle = '#d3d9df'; ctx.beginPath();
+  for(let x=Math.floor(x0/0.5)*0.5; x<=x1; x+=0.5){ const p=rsW2P(x,0); ctx.moveTo(p.px,0); ctx.lineTo(p.px,Hc); }
+  for(let y=Math.floor(y0/0.5)*0.5; y<=y1; y+=0.5){ const p=rsW2P(0,y); ctx.moveTo(0,p.py); ctx.lineTo(Wc,p.py); }
+  ctx.stroke();
+  const pill = (txt, x, y, col)=>{ ctx.font = 'bold 10.5px Barlow,sans-serif'; ctx.textAlign = 'center';
+    const w = ctx.measureText(txt).width + 10; ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillRect(x-w/2, y-9, w, 15);
+    ctx.fillStyle = col || '#1a3a4c'; ctx.fillText(txt, x, y+3); };
+  const r = window._reposRef;
+  if(r){
+    // trappeløp (faste referanser)
+    (r.flights||[]).forEach((f,i)=>{
+      const p1 = rsW2P(f.x1, f.y2), p2 = rsW2P(f.x2, f.y1);
+      ctx.fillStyle = 'rgba(45,97,124,.14)'; ctx.fillRect(p1.px, p1.py, p2.px-p1.px, p2.py-p1.py);
+      ctx.strokeStyle = 'rgba(45,97,124,.55)'; ctx.lineWidth = 1; ctx.strokeRect(p1.px, p1.py, p2.px-p1.px, p2.py-p1.py);
+      pill(r.flights.length>1 ? 'Trapp '+(i+1) : 'Trapp', (p1.px+p2.px)/2, (p1.py+p2.py)/2, '#2d617c');
+    });
+    // repos-dekke
+    const a = rsW2P(r.x1, r.depth), b = rsW2P(r.x2, 0);
+    ctx.fillStyle = 'rgba(155,160,168,.20)'; ctx.fillRect(a.px, a.py, b.px-a.px, b.py-a.py);
+    ctx.strokeStyle = '#b8bec6'; ctx.lineWidth = 1.2; ctx.strokeRect(a.px, a.py, b.px-a.px, b.py-a.py);
+    if(!rsSegs().length){ // rekkverkssegmentene viser egne mål — reposmålene kun når rekkverket er av
+      pill(Math.round((r.x2-r.x1)*1000)+' mm', (a.px+b.px)/2, a.py-12, '#6b7280');
+      pill(Math.round(r.depth*1000)+' mm', a.px-34, (a.py+b.py)/2, '#6b7280');
+    }
+  }
+  // rekkverk
+  const segs = rsSegs();
+  if(!segs.length && r){
+    ctx.font = 'bold 11px Barlow,sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#9a6b00';
+    const c = rsW2P((r.x1+r.x2)/2, r.depth/2); ctx.fillText('Rekkverk på repos er slått av', c.px, c.py);
+  }
+  segs.forEach(s=>{
+    const a = rsW2P(s.x1,s.y1), b = rsW2P(s.x2,s.y2), off = S.reposRailExcluded.has(s.id);
+    ctx.beginPath(); ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py);
+    ctx.setLineDash(off ? [6,4] : []); ctx.strokeStyle = off ? '#9aa0a8' : '#2d617c'; ctx.lineWidth = off ? 1.8 : 3.5; ctx.stroke(); ctx.setLineDash([]);
+    pill(Math.round(Math.hypot(s.x2-s.x1, s.y2-s.y1)*1000)+' mm', (a.px+b.px)/2, (a.py+b.py)/2, off ? '#6b7280' : '#1a3a4c');
+  });
+  // søyler
+  rsPosts().forEach(p=>{ const q = rsW2P(p.x,p.y); ctx.beginPath(); ctx.arc(q.px,q.py,p.extra?6:5.5,0,Math.PI*2);
+    ctx.fillStyle = p.extra ? '#e67e22' : '#c0392b'; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke(); });
+  // forhåndsvisning av ny søyle + avstander til naboene
+  const h = RS.hover;
+  if(h && RS.addPost){
+    const p = rsW2P(h.x,h.y);
+    const ps = rsEdgePosts(h.e), horiz = (h.e==='f' || h.e==='b');
+    const prev = ps.filter(v=>v < h.o-1e-6).pop(), next = ps.filter(v=>v > h.o+1e-6)[0];
+    const lineTo = (v)=>{ const q = horiz ? rsW2P(window._reposRef.x1+v, h.y) : rsW2P(h.x, v);
+      ctx.beginPath(); ctx.moveTo(p.px,p.py); ctx.lineTo(q.px,q.py); ctx.setLineDash([4,3]); ctx.strokeStyle = h.blocked ? 'rgba(192,57,43,.6)' : 'rgba(39,174,96,.9)'; ctx.lineWidth = 1.6; ctx.stroke(); ctx.setLineDash([]);
+      pill(Math.round(Math.abs(v-h.o)*1000)+' mm', (p.px+q.px)/2, (p.py+q.py)/2 - 12, h.blocked ? '#c0392b' : '#27ae60'); };
+    if(prev !== undefined) lineTo(prev); if(next !== undefined) lineTo(next);
+    ctx.beginPath(); ctx.arc(p.px,p.py,7,0,Math.PI*2); ctx.fillStyle = h.blocked ? 'rgba(192,57,43,.7)' : (h.kind==='mid' ? 'rgba(39,174,96,.95)' : 'rgba(230,126,34,.85)'); ctx.fill();
+    if(h.blocked && h.reason) pill(h.reason, p.px, p.py-22, '#c0392b');
+  }
+  // statuslinje
+  {
+    const msg = RS.addPost ? 'Klikk langs en kant for å plassere en søyle (grønn = midt mellom to)' : 'Klikk et rekkverk for av/på · klikk en søyle for å fjerne den · «➕ Søyle» for å legge til';
+    ctx.font = 'bold 11.5px Barlow,sans-serif'; ctx.textAlign = 'left';
+    const tw = ctx.measureText(msg).width + 20;
+    ctx.fillStyle = RS.addPost ? 'rgba(241,157,13,.95)' : 'rgba(26,58,76,.88)'; ctx.fillRect(12, 12, tw, 24);
+    ctx.fillStyle = '#fff'; ctx.fillText(msg, 22, 28); ctx.textAlign = 'center';
+  }
+}
+
+(function rsWire(){
+  const cv = document.getElementById('repos-cv'); if(!cv) return;
+  cv.addEventListener('mousemove', function(e){
+    const c = rsCanvasPos(e);
+    if(RS._panning){ RS.ox = RS._panOrigin.ox + (c.px-RS._panStart.px); RS.oy = RS._panOrigin.oy + (c.py-RS._panStart.py); rsDraw(); return; }
+    RS.hover = RS.addPost ? rsSnapPost(rsP2W(c.px, c.py)) : null;
+    rsDraw();
+  });
+  cv.addEventListener('mouseleave', ()=>{ RS.hover = null; rsDraw(); });
+  cv.addEventListener('contextmenu', e=>e.preventDefault());
+  cv.addEventListener('mousedown', function(e){ if(e.button===2){ RS._panning = true; RS._panStart = rsCanvasPos(e); RS._panOrigin = { ox:RS.ox, oy:RS.oy }; cv.style.cursor = 'grabbing'; } });
+  window.addEventListener('mouseup', ()=>{ if(RS._panning){ RS._panning = false; cv.style.cursor = 'crosshair'; } });
+  cv.addEventListener('wheel', function(e){
+    e.preventDefault();
+    const c = rsCanvasPos(e), before = rsP2W(c.px, c.py);
+    RS.scale = Math.max(20, Math.min(1200, RS.scale * (e.deltaY < 0 ? 1.12 : 1/1.12)));
+    RS.ox = c.px - before.x*RS.scale; RS.oy = c.py + before.y*RS.scale; rsDraw();
+  }, { passive:false });
+  cv.addEventListener('click', function(e){ const c = rsCanvasPos(e); rsHandleClick(c.px, c.py); });
+  cv.addEventListener('touchstart', function(e){ e.preventDefault(); const c = rsCanvasPos(e); rsHandleClick(c.px, c.py); }, { passive:false });
+})();
+
 document.querySelectorAll('[data-st]').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('[data-st]').forEach(x=>x.classList.remove('tbs'));
   b.classList.add('tbs'); S.type=b.dataset.st;
+  if(S.type!=='straight') S.reposPlatform = false; // platform-valget gjelder kun rettløp
+  REPOS.legsExcluded = [];                         // hjørne-geometrien endres med typen
+  REPOS.extraLegs = [];
   _refreshActiveStairLabelForTypeChange();
   const isRepos = S.type!=='straight';
-  document.getElementById('f2-section').style.display    = isRepos?'block':'none';
-  document.getElementById('repos-section').style.display = isRepos?'block':'none';
-  // repos-rail checkbox only for repos, tilbakestill always visible
-  const reposRailInner = document.getElementById('repos-rail-row-inner');
-  if(reposRailInner) reposRailInner.style.display = isRepos ? 'block' : 'none';
-  document.getElementById('r180-positions').style.display = S.type==='r180'?'block':'none';
-  document.getElementById('r90-positions').style.display = (S.type==='r90r'||S.type==='r90l')?'block':'none';
+  _refreshReposUI();
   { const isR=S.type!=='straight'; const lbl=document.getElementById('lbl-h');
     if(lbl) lbl.textContent=(isR&&S.f2independent)?'Høyde Flight 1':'Høyde'; }
   if(isRepos){
@@ -2949,6 +3383,26 @@ function SC(k){
         b.classList.toggle('tbs', b.dataset.rl==='spiler');
       });
     }
+  }
+  if(k==='reposPlatform'){
+    // Platform på/av: nullstill søyler/rekkverk-unntak og sett fornuftige reposmål
+    REPOS.legsExcluded = [];
+    REPOS.extraLegs = [];
+    S.reposRailExcluded = new Set();
+    if(S.reposPlatform){
+      const defB = S.widthMm, defD = Math.max(S.widthMm, 1000);
+      REPOS.breddeMm = defB; REPOS.dybdeMm = defD; REPOS.f1xMm = 0;
+      const rb=document.getElementById('s-rb'), rd=document.getElementById('s-rd');
+      if(rb){ rb.min=S.widthMm; rb.value=defB; }
+      if(rd){ rd.min=S.widthMm; rd.value=defD; }
+      document.getElementById('v-rb').textContent = defB+' mm';
+      document.getElementById('v-rd').textContent = defD+' mm';
+      const sf=document.getElementById('s-f1x'); if(sf) sf.value=0;
+      updateF1xMax();
+      const vf=document.getElementById('v-f1x'); if(vf) vf.textContent=_f1xGapText(0);
+    }
+    _refreshReposUI();
+    _refreshActiveStairLabelForTypeChange();
   }
   buildStair();
 }
@@ -3317,6 +3771,7 @@ function generateStairCutList(n, oppMm, angleDeg){
   const out = ['─── MATERIALLISTE (veiledende) ───'];
   const row = (navn,ant,len,enhet,merknad) =>
     navn.padEnd(22)+String(ant).padStart(4)+'  stk  ×  '+String(len).padStart(5)+' '+enhet+(merknad?' ('+merknad+')':'');
+  // Repos-søyler: lagt til på slutten av listen (se under) — samme tall som Excel
 
   out.push(row('Trappevange',       nFlights*2,             vangeLen, 'mm', 'inkl. vinkeltillegg'));
   out.push(row('Trinnprofil 250mm', nFlights*treadCount,    Math.round(Wm*1000), 'mm', ''));
@@ -3334,6 +3789,15 @@ function generateStairCutList(n, oppMm, angleDeg){
       out.push(row('U-profil spiler', nFlights*sides*nUProfil, Math.round(Wm*1000), 'mm', 'per felt'));
     } else if(S.rail === 'knelist'){
       out.push(row('Knelist', nFlights*sides, klLen, 'mm', ''));
+    }
+  }
+  if(S.type!=='straight' || _isPlatform(S)){
+    const exL = new Set(Array.isArray(REPOS.legsExcluded) ? REPOS.legsExcluded : []);
+    const nL  = ['fl','fr','bl','br'].filter(id=>!exL.has(id)).length + (Array.isArray(REPOS.extraLegs) ? REPOS.extraLegs.length : 0);
+    const lH  = _reposLegHeightMm(S);
+    if(nL>0 && lH>50){
+      out.push(row('Repos-søyle', nL, lH, 'mm', 'gulv → underside repos'));
+      out.push(row('Flens (repos-søyle)', nL*2, 180, 'mm', 'én i hver ende av søylen'));
     }
   }
   return out;
@@ -3438,11 +3902,21 @@ function validateBedrift(prefix){
 // ═══════════════════════════════════════════════════════
 
 // Returns structured rows [{beskrivelse, antall, lengde_mm, enhet, merknad}]
+// Søylelengde under repos (mm) — speiler platY i buildStair(): rettløp-platform
+// = høyde − dekktykkelse; 90°/180° = (antall trinn i løp 1) × opptrinn.
+function _reposLegHeightMm(sS){
+  if(_isPlatform(sS)) return Math.round((sS.heightCm/100 - P.NRM_H)*1000);
+  const Ht = sS.heightCm/100;
+  const aR = (sS.angleDeg||35)*Math.PI/180;
+  const nT = sS.nManual || Math.max(3, Math.round(Ht/(P.TRINN_W*Math.tan(aR))));
+  return Math.round(Math.floor(nT/2)*(Ht/nT)*1000);
+}
 function getStairCutRows(snapS, snapREPOS){
   const sS = snapS;
   const aR  = (sS.angleDeg||35)*Math.PI/180;
   // Per-flight høyde: rettløp = total, repos = total/2
-  const H   = sS.type==='straight' ? sS.heightCm/100 : sS.heightCm/200;
+  // Rettløp med platform: løpet stiger (høyde − dekktykkelse) — se buildStair()
+  const H   = sS.type==='straight' ? sS.heightCm/100 - _isPlatform(sS)*P.NRM_H : sS.heightCm/200;
   const Wm  = sS.widthMm/1000;
   const n   = Math.max(3, Math.round(H/(P.TRINN_W*Math.tan(aR))));
   const sh  = H/n;
@@ -3473,7 +3947,7 @@ function getStairCutRows(snapS, snapREPOS){
   }
 
   const tl={straight:'Rettløp',r90r:'Repos 90° høyre',r90l:'Repos 90° venstre',r180:'Repos 180°'};
-  const typeLabel = tl[sS.type]||sS.type;
+  const typeLabel = _isPlatform(sS) ? 'Rettløp + repos' : (tl[sS.type]||sS.type);
   const rows = [];
   const r = (b,a,l,e,m) => rows.push({Beskrivelse:xlSafe(b), Antall:a, 'Lengde (mm)':l, Enhet:e, Merknad:xlSafe(m||'')});
 
@@ -3497,14 +3971,23 @@ function getStairCutRows(snapS, snapREPOS){
       r('Knelist', nFlights*sides, klLen, 'mm', '');
     }
   }
-  // Repos-profil (gangbaneprofil) — kun for repos-typer
-  if(sS.type !== 'straight' && snapREPOS){
+  // Repos-profil (gangbaneprofil) + søyler — repos-typer og rettløp med platform
+  if((sS.type !== 'straight' || _isPlatform(sS)) && snapREPOS){
     const rB = snapREPOS.breddeMm || Math.round(Wm*1000);
     const rD = snapREPOS.dybdeMm  || Math.round(Wm*1000);
     rows.push({Beskrivelse:'', Antall:'', 'Lengde (mm)':'', Enhet:'', Merknad:''});
     rows.push({Beskrivelse:'── Repos ──', Antall:'', 'Lengde (mm)':'', Enhet:'', Merknad:rB+'×'+rD+' mm'});
     r('Gangbaneprofil (repos)', 2, rB, 'mm', 'bredde');
     r('Gangbaneprofil (repos)', 2, rD, 'mm', 'dybde');
+    // Søyler i hjørnene (ett per hjørne, minus de som er fjernet ved klikk).
+    // Hver søyle har en flens i hver ende → 2 flenser per søyle.
+    const exLegs = new Set(Array.isArray(snapREPOS.legsExcluded) ? snapREPOS.legsExcluded : []);
+    const nLegs = ['fl','fr','bl','br'].filter(id => !exLegs.has(id)).length + (Array.isArray(snapREPOS.extraLegs) ? snapREPOS.extraLegs.length : 0);
+    const legH  = _reposLegHeightMm(sS);
+    if(nLegs > 0 && legH > 50){
+      r('Repos-søyle', nLegs, legH, 'mm', 'gulv → underside repos');
+      r('Flens (repos-søyle)', nLegs*2, 180, 'mm', '180×10×180mm, én i hver ende av søylen');
+    }
   }
 
   return rows;
@@ -3536,6 +4019,80 @@ function getWalkCutRows(snapW){
   if(W2.wtoe){
     r('Fotlist', W2.whand?2:1, Math.round(L*1000), 'mm', '100mm høy');
   }
+  // Bæring: søyler + fot-/topplate — manglet helt fra før (kun bygget i
+  // 3D, aldri listet). Fotplate/topplate er alltid 10mm i materiallisten,
+  // uavhengig av hva 3D-boksen (forenklet visning) selv bruker.
+  if(W2.bearing === 'posts' && (W2.height/100) > 0.05){
+    const span = W2.span/100;
+    const nP = Math.max(2, Math.ceil(L/span)+1);
+    const totalPosts = nP*2; // to rekker (begge sider)
+    r('Bæresøyle', totalPosts, Math.round(W2.height*10), 'mm', 'c-c '+W2.span+'cm, 2 rekker');
+    r('Fotplate', totalPosts, 180, 'mm', '180×10×180mm, én per søyle');
+    r('Topplate', totalPosts, 180, 'mm', '180×10×180mm, én per søyle');
+  }
+  return rows;
+}
+
+// ─── SKISSE-BYGGET GANGBANE: EGEN MATERIALLISTE ──────────
+// Kan ikke gjenbruke getWalkCutRows() — den forutsetter én rett strekning
+// (W2.length). En skisse er en fri (potensielt forgrenet) kontur der hver
+// kant har sin egen lengde, så hver kant må listes for seg (samme
+// tankegang som en fabrikatør uansett trenger — nøyaktig kapplengde per
+// stykke, ikke bare en totalsum). Speiler EKSAKT samme formler som
+// buildWalk() sin skisse-gren bruker for faktisk geometri, slik at listen
+// alltid stemmer med det som faktisk vises i 3D.
+function getSketchWalkCutRows(snapW){
+  const W2 = snapW;
+  const pts = W2.sketchPoints;
+  const rows = [];
+  const r = (b,a,l,e,m) => rows.push({Beskrivelse:xlSafe(b), Antall:a, 'Lengde (mm)':l, Enhet:e, Merknad:xlSafe(m||'')});
+  if(!pts || pts.length < 3) return rows;
+
+  const allPts = [...pts, pts[0]];
+  const railExcluded = W2.sketchRailExcluded || new Set();
+
+  // Ramme/kant — én rad per kant, siden lengden varierer med formen.
+  for(let i=0;i<allPts.length-1;i++){
+    const a=allPts[i], b=allPts[i+1];
+    const segLen = Math.sqrt((b.x-a.x)**2+(b.y-a.y)**2);
+    if(segLen < 0.05) continue;
+    r('Gangbane ramme, kant '+(i+1), 1, Math.round(segLen*1000), 'mm', '');
+  }
+
+  // Rekkverk — kun på kanter som ikke er markert "uten rekkverk".
+  // Stolpetallet speiler dagens 3D-bygging nøyaktig (se buildWalk) — merk
+  // at denne foreløpig kan telle en stolpe dobbelt i hjørner der to
+  // rekkverks-kanter møtes (samme sted i 3D-modellen), siden hver kant
+  // bygges uavhengig av naboene sine. Ikke rettet opp her — materiallisten
+  // skal stemme med det som faktisk bygges, ikke en idealisert versjon.
+  if(W2.rail !== 'none'){
+    let totalStolper = 0;
+    for(let i=0;i<allPts.length-1;i++){
+      if(railExcluded.has(i)) continue;
+      const a=allPts[i], b=allPts[i+1];
+      const segLen = Math.sqrt((b.x-a.x)**2+(b.y-a.y)**2);
+      if(segLen < 0.05) continue;
+      totalStolper += Math.max(2, Math.ceil(segLen/1.2)+1);
+      r('Håndløper, kant '+(i+1), 1, Math.round(segLen*1000), 'mm', '');
+      r('Knelist 50×5mm, kant '+(i+1), 1, Math.round(segLen*1000), 'mm', '');
+    }
+    if(totalStolper > 0) r('Rekkverksstender', totalStolper, Math.round((P.RAIL_H||1.0)*1000), 'mm', 'maks 1200mm c-c per kant');
+  }
+
+  // Bæring: søyler + fot-/topplate — samme antall som _getSketchPostPositions()
+  // faktisk plasserer i 3D (auto-beregnet, eller brukerens egen tilpassede
+  // plassering fra skisseverktøyet).
+  const elev = (W2.height||0)/100;
+  if(W2.bearing === 'posts' && elev > 0.05){
+    const span = W2.span/100;
+    const postPositions = W2.sketchPosts ? W2.sketchPosts : _computeDefaultSketchPosts(pts, span);
+    const n = postPositions.length;
+    if(n > 0){
+      r('Bæresøyle', n, Math.round(W2.height*10), 'mm', '');
+      r('Fotplate', n, 180, 'mm', '180×10×180mm, én per søyle');
+      r('Topplate', n, 180, 'mm', '180×10×180mm, én per søyle');
+    }
+  }
   return rows;
 }
 
@@ -3559,6 +4116,8 @@ function generateExcel(){
 
     if(k.mode==='stair'){
       rows = getStairCutRows(k.snapS, k.snapREPOS);
+    } else if(k.snapW.sketchPoints && k.snapW.sketchClosed){
+      rows = getSketchWalkCutRows(k.snapW);
     } else {
       rows = getWalkCutRows(k.snapW);
     }
@@ -3970,9 +4529,13 @@ async function sendStair(){
   let body=[
     'Konfigurasjon trapp — Normeka','',
     ...(document.getElementById('sf-project')&&document.getElementById('sf-project').value?['Prosjekt: '+document.getElementById('sf-project').value]:[]),'',
-    'Type: '+tl[S.type],
+    'Type: '+(_isPlatform(S) ? 'Rettløp + repos' : tl[S.type]),
     'Bredde: '+S.widthMm+' mm  |  Overflate: '+S.mat,
     ...heightLines,
+    ...((S.type!=='straight' || _isPlatform(S))
+        ? ['Repos: '+(REPOS.breddeMm||S.widthMm)+' × '+(REPOS.dybdeMm||S.widthMm)+' mm'+(_isPlatform(S)?' (platform på toppen av trappen)':''),
+           'Repos-søyler: '+((4 - (Array.isArray(REPOS.legsExcluded)?REPOS.legsExcluded.length:0)) + (Array.isArray(REPOS.extraLegs)?REPOS.extraLegs.length:0))+' stk'+((Array.isArray(REPOS.extraLegs)&&REPOS.extraLegs.length)?' (inkl. '+REPOS.extraLegs.length+' ekstra langs kantene)':'')]
+        : []),
     'Inntrinn: '+Math.round(P.TRINN_W*1000)+' mm',
     'Rekkverk: '+railLabels2[S.rail],
     'Lukket opptrinn: '+(S.riser?'Ja':'Nei'),
@@ -4445,6 +5008,19 @@ canvas.addEventListener('mouseup', e=>{
         tip.style.display='none';
         setTimeout(() => { buildStair(); showToast('✕ Rekkverk fjernet — bruk «Tilbakestill» for å få det tilbake'); }, 200);
       }
+      return;
+    } else if(t==='reposLeg'){
+      // Fjern søylen (hjørne-ID i REPOS.legsExcluded) — «Tilbakestill søyler» henter dem tilbake
+      if(/^x\d+$/.test(d.legId)){
+        // Ekstra søyle (lagt til i repos-skissen): fjern fra lista
+        const xi = +d.legId.slice(1);
+        REPOS.extraLegs = (Array.isArray(REPOS.extraLegs) ? REPOS.extraLegs : []).filter((_,i)=>i!==xi);
+      } else {
+        const cur = Array.isArray(REPOS.legsExcluded) ? REPOS.legsExcluded : [];
+        if(!cur.includes(d.legId)) REPOS.legsExcluded = [...cur, d.legId];
+      }
+      tip.style.display='none';
+      setTimeout(() => { buildStair(); showToast('✕ Søyle fjernet — bruk «Tilbakestill søyler» for å få den tilbake'); }, 0);
       return;
     } else if(t==='flightRail'){
       const sid = d.segId;
@@ -5521,6 +6097,14 @@ function updateDimOverlay(){
     const wL=p3(-d.Wm/2, 0.05, 0);
     const wR=p3( d.Wm/2, 0.05, 0);
     if(!wL.behind&&!wR.behind) dim(wL.x,wL.y, wR.x,wR.y, d.widthMm+' mm', GREEN, UP);
+    if(d.platform){
+      // Reposmål: bredde langs bakkant, dybde langs venstre kant
+      const dimY = d.reposTopY + 0.05, backZ = d.reposZ - d.rD;
+      const rbL=p3(-d.rB/2, dimY, backZ), rbR=p3(d.rB/2, dimY, backZ);
+      if(!rbL.behind&&!rbR.behind) dim(rbL.x,rbL.y, rbR.x,rbR.y, Math.round(d.rB*1000)+' mm', BLUE, DN);
+      const rdF=p3(-d.rB/2, dimY, d.reposZ), rdB=p3(-d.rB/2, dimY, backZ);
+      if(!rdF.behind&&!rdB.behind) dim(rdF.x,rdF.y, rdB.x,rdB.y, Math.round(d.rD*1000)+' mm', BLUE, LFT);
+    }
 
   } else if(d.type==='r90r'||d.type==='r90l'){
     const {platY,rB,rD,reposZ,f1xOff,f2StartZ,Wm,VANG_W} = d;
@@ -6025,13 +6609,7 @@ function syncDOMFromState(mode) {
     // Rail buttons
     document.querySelectorAll('[data-rl]').forEach(b=>b.classList.toggle('tbs',b.dataset.rl===S.rail));
     // Panel visibility
-    const isRepos = S.type!=='straight';
-    document.getElementById('f2-section').style.display = isRepos?'block':'none';
-    document.getElementById('repos-section').style.display = isRepos?'block':'none';
-    document.getElementById('r180-positions').style.display = S.type==='r180'?'block':'none';
-    document.getElementById('r90-positions').style.display = (S.type==='r90r'||S.type==='r90l')?'block':'none';
-    const reposRailInner=document.getElementById('repos-rail-row-inner');
-    if(reposRailInner) reposRailInner.style.display=isRepos?'block':'none';
+    _refreshReposUI();
     // TEK17 lock
     const locked=S.tek17;
     const slR=document.getElementById('s-r'), slR2=document.getElementById('s-r2');
@@ -6070,7 +6648,8 @@ function syncDOMFromState(mode) {
 // (ved opprettelse) og _refreshActiveStairLabelForTypeChange() (ved
 // typeendring på en eksisterende config), slik at de to aldri kan drifte
 // fra hverandre (kun ETT sted å oppdatere hvis en ny trapptype legges til).
-function _stairTypeName(type){
+function _stairTypeName(type, platform){
+  if(type==='straight' && platform) return 'Rettløp + repos';
   const typeMap = {
     'straight': 'Rettløp',
     'r90r':     'Repos 90° høyre',
@@ -6083,7 +6662,7 @@ function _makeLabel(mode) {
   const stairCount = _konfigList.filter(k=>k.mode==='stair').length + (mode==='stair'?1:0);
   const walkCount  = _konfigList.filter(k=>k.mode==='walk').length  + (mode==='walk' ?1:0);
   if(mode === 'stair') {
-    return _stairTypeName(S.type) + ' ' + stairCount;
+    return _stairTypeName(S.type, S.reposPlatform) + ' ' + stairCount;
   }
   return 'Gangbane ' + walkCount;
 }
@@ -6106,7 +6685,7 @@ function _labelTrailingNumber(label){
 function _refreshActiveStairLabelForTypeChange(){
   const k = _konfigList.find(k=>k.id===_activeKonfigId);
   if(!k || k.mode!=='stair' || k.labelIsCustom) return;
-  k.label = _stairTypeName(S.type) + ' ' + _labelTrailingNumber(k.label);
+  k.label = _stairTypeName(S.type, S.reposPlatform) + ' ' + _labelTrailingNumber(k.label);
   renderKonfigTabs();
 }
 
@@ -7664,11 +8243,13 @@ function checkGearLogin() {
     const pw = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
     if (pw === _GEAR_HASH) {
       closeGearModal();
-      // Vis 3D Bibliotek og MA på startmenyen
+      // Vis 3D Bibliotek, MA og aktivitets-ping på startmenyen
       const lib = document.getElementById('lib-welcome-card');
       const ma  = document.getElementById('ma-welcome-card');
+      const ping = document.getElementById('ping-welcome-card');
       if (lib) lib.style.removeProperty('display');
       if (ma)  ma.style.removeProperty('display');
+      if (ping) ping.style.removeProperty('display');
       // Samme passord som gear-lås — lås opp biblioteket med det samme
       // slik at man ikke må taste det inn på nytt ved første åpning
       if (typeof LIB !== 'undefined' && LIB.unlock) LIB.unlock();
@@ -7678,6 +8259,26 @@ function checkGearLogin() {
       document.getElementById('gear-input').select();
     }
   });
+}
+
+// ── Aktivitets-ping ──────────────────────────────────────────
+// Manuelt utløst, ekte forespørsel mot Supabase sitt REST-API.
+// Formålet er utelukkende å telle som aktivitet overfor Supabase,
+// slik at et lite brukt (men fortsatt aktivt brukt internt) prosjekt
+// ikke blir satt på pause pga. inaktivitet. Gjør en enkel, side-
+// effektfri lesning (samme mønster/konstanter som library-synken
+// lenger oppe i filen) — ingen data skrives eller endres.
+async function sendKeepAlivePing() {
+  try {
+    const res = await fetch(_SB_URL + '/rest/v1/configurations?select=short_id&limit=1', { headers: _SB_HDRS });
+    if (res.ok) {
+      showToast('📡 Ping sendt — ' + new Date().toLocaleString('nb-NO'));
+    } else {
+      showToast('⚠ Ping feilet: ' + res.status);
+    }
+  } catch (e) {
+    showToast('⚠ Ping feilet — sjekk nettforbindelse');
+  }
 }
 
 // ── Forespørsel-system ──────────────────────────────────────
