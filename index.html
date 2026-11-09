@@ -694,7 +694,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
   <div class="sketch-header">
     <h2>✏ Repos — rekkverk og søyler</h2>
     <div class="sketch-toolbar">
-      <button id="rs-add-post-btn" onclick="rsToggleAddPost()" title="Klikk her, deretter klikk langs en kant for å legge til en søyle"
+      <button id="rs-add-post-btn" onclick="rsToggleAddPost()" title="Slår på søyle-modus: klikk langs kantene for å plassere flere søyler på rad. Klikk igjen (eller Esc) for å avslutte"
         style="padding:.3rem .6rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.75rem;cursor:pointer;margin-right:.4rem;">➕ Søyle</button>
       <button onclick="rsResetPosts()" style="padding:.3rem .6rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.75rem;cursor:pointer;">↺ Søyler</button>
       <button onclick="rsResetRail()" style="padding:.3rem .6rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:.75rem;cursor:pointer;margin-right:.4rem;">↺ Rekkverk</button>
@@ -728,7 +728,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
     <div class="sketch-canvas-wrap">
       <canvas id="sketch-cv"></canvas>
       <div style="position:absolute;bottom:.5rem;left:.5rem;font-size:.68rem;color:#888;background:rgba(255,255,255,.85);padding:.2rem .5rem;border-radius:1rem;">
-        Klikk for å sette punkt · Klikk 🟡 for å lukke · Dobbeltklikk segment for eksakt mål · Klikk en linje i LUKKET form for å bytte mellom rekkverk/uten rekkverk
+        Klikk for å sette punkt · Klikk 🟡 for å lukke · Dobbeltklikk segment for eksakt mål · Klikk en linje i LUKKET form for å bytte mellom rekkverk/uten rekkverk · «➕ Søyle» blir stående på til du trykker knappen igjen eller Esc
       </div>
     </div>
     <div class="sketch-sidebar">
@@ -1105,7 +1105,7 @@ body.dark-mode .ripple-circle { background: rgba(255,255,255,.25); }
           <button class="tb" data-rl="open">Uten rekkverk</button>
         </div>
         <div class="ckr" onclick="SC('riser')">
-          <div class="ckb cbs" id="sb-riser"><svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="ckb" id="sb-riser"><svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <span class="ckl">Lukket opptrinn</span>
         </div>
 
@@ -1433,7 +1433,7 @@ const S = {
   heightCm:240, widthMm:900, angleDeg:35,
   f2independent:false, height2Cm:200, angle2Deg:35,
   type:'straight', mat:'alu-raw',
-  handrail:true, riser:true, tek17:false, rail:'spiler', reposRail:true, nManual:null,
+  handrail:true, riser:false, tek17:false, rail:'spiler', reposRail:true, nManual:null,
   reposPlatform:false, // rettløp: repos/platform på toppen (ingen trapp #2)
   reposRailExcluded: new Set(), // set of excluded repos rail segment IDs
   flightRailExcluded: new Set()  // set of excluded flight rail segment IDs
@@ -3111,15 +3111,6 @@ function rsNearestEdge(p){
   ].filter(q=> q.o > -0.15 && q.o < q.len + 0.15).sort((a,b)=>a.d-b.d);
   return c[0] || null;
 }
-// Er posisjonen (langs kanten) inne i en trappeåpning? (søylas halve bredde + litt klaring)
-function rsInOpening(e, o){
-  const r = window._reposRef, m = RS_INSET;
-  if(e === 'f') return (r.front||[]).some(g=> (r.x1+o) > g.a - m && (r.x1+o) < g.b + m);
-  if(r.side && ((e==='r' && r.side.x > 0) || (e==='l' && r.side.x < 0))){
-    const lo = Math.min(r.side.a, r.side.b), hi = Math.max(r.side.a, r.side.b); return o > lo - m && o < hi + m;
-  }
-  return false;
-}
 // Søyleposisjon langs en kant, målt som o fra kantens start
 function rsPostOnEdge(e, p){
   const r = window._reposRef;
@@ -3146,9 +3137,10 @@ function rsSnapPost(raw){
   for(let k=0;k<ps.length-1;k++){ const m = (ps[k]+ps[k+1])/2; if(Math.abs(m - q.o) < thr){ o = m; kind = 'mid'; break; } }
   if(kind === 'edge') o = Math.max(lo, Math.min(hi, Math.round(o/RS.GRID)*RS.GRID));
   const tooClose = rsPosts().some(p=>{ const loc = rsPostOnEdge(q.e,p); const onEdge = rsEdgePosts(q.e).includes(loc); return onEdge && Math.abs(loc - o) < 0.12; });
-  const blocked = rsInOpening(q.e, o) || tooClose;
+  // Søyler står under reposdekket og kommer ikke i konflikt med trappen — de kan derfor også stå i trappeåpningene.
+  const blocked = tooClose;
   const pos = _reposExtraLocal({ e:q.e, o }, r.x1, r.x2, r.depth, RS_INSET);
-  return { e:q.e, o:+o.toFixed(4), x:pos.x, y:pos.y, kind, blocked, reason: rsInOpening(q.e,o) ? 'Ikke i trappeåpningen' : (tooClose ? 'For nær en annen søyle' : '') };
+  return { e:q.e, o:+o.toFixed(4), x:pos.x, y:pos.y, kind, blocked, reason: tooClose ? 'For nær en annen søyle' : '' };
 }
 
 function rsSetBtn(){
@@ -3165,7 +3157,8 @@ function rsHandleClick(px, py){
   const raw = rsP2W(px, py);
   if(RS.addPost){
     const sn = rsSnapPost(raw);
-    if(sn && !sn.blocked){ REPOS.extraLegs = [...(Array.isArray(REPOS.extraLegs) ? REPOS.extraLegs : []), { e:sn.e, o:sn.o }]; RS.addPost = false; RS.hover = null; rsSetBtn(); rsApply(); }
+    // Modusen blir stående på (flere søyler på rad) — slås av med «➕ Søyle» igjen eller Esc
+    if(sn && !sn.blocked){ REPOS.extraLegs = [...(Array.isArray(REPOS.extraLegs) ? REPOS.extraLegs : []), { e:sn.e, o:sn.o }]; RS.hover = rsSnapPost(raw); rsApply(); }
     else if(sn){ showToast('⚠ '+sn.reason); }
     return;
   }
@@ -3281,13 +3274,22 @@ function rsDraw(){
   }
   // statuslinje
   {
-    const msg = RS.addPost ? 'Klikk langs en kant for å plassere en søyle (grønn = midt mellom to)' : 'Klikk et rekkverk for av/på · klikk en søyle for å fjerne den · «➕ Søyle» for å legge til';
+    const msg = RS.addPost ? 'Søyle-modus: klikk langs kantene for å plassere (grønn = midt mellom to) · Esc eller «➕ Søyle» avslutter' : 'Klikk et rekkverk for av/på · klikk en søyle for å fjerne den · «➕ Søyle» for å legge til';
     ctx.font = 'bold 11.5px Barlow,sans-serif'; ctx.textAlign = 'left';
     const tw = ctx.measureText(msg).width + 20;
     ctx.fillStyle = RS.addPost ? 'rgba(241,157,13,.95)' : 'rgba(26,58,76,.88)'; ctx.fillRect(12, 12, tw, 24);
     ctx.fillStyle = '#fff'; ctx.fillText(msg, 22, 28); ctx.textAlign = 'center';
   }
 }
+
+// Esc avslutter søyle-modus (både repos-skissen og gangbane-skissen)
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Escape') return;
+  const ro = document.getElementById('repos-overlay');
+  if(ro && ro.classList.contains('open') && RS.addPost) rsToggleAddPost();
+  const so = document.getElementById('sketch-overlay');
+  if(so && so.classList.contains('open') && SK.addPostMode) sketchToggleAddPostMode();
+});
 
 (function rsWire(){
   const cv = document.getElementById('repos-cv'); if(!cv) return;
@@ -5134,26 +5136,39 @@ function _getSketchPostPositions(pts, span){
 // et vanlig klikk rett etterpå ikke ved et uhell legger til enda en søyle.
 function sketchToggleAddPostMode(){
   SK.addPostMode = !SK.addPostMode;
+  // Søyler finnes bare på «Med søyler» (bæring-valget i panelet er skjult bak skissen). Slår man på
+  // søyle-modus mens gangbanen står på «Selvbærende», byttes den derfor automatisk — ellers ville
+  // klikkene bare slått rekkverk av/på uten at noen søyle ble lagt til.
+  if(SK.addPostMode && W.bearing !== 'posts'){
+    const pb = document.querySelector('[data-wb="posts"]');
+    if(pb){ pb.click(); showToast('Byttet til «Med søyler» — søyler kan bare plasseres da'); }
+  }
   if(!SK.addPostMode) SK._postHoverSnap = null; // rydd forhåndsvisning når modus slås av
   const btn = document.getElementById('sk-add-post-btn');
   if(btn){
     btn.style.background = SK.addPostMode ? 'var(--ngreen)' : 'rgba(255,255,255,.15)';
     btn.style.borderColor = SK.addPostMode ? 'var(--ngreen)' : 'rgba(255,255,255,.3)';
   }
+  if(document.getElementById('sketch-overlay').classList.contains('open')) sketchDraw();
 }
 
+// Søyle-modus blir stående på etter hvert klikk — den må derfor slås av når skissen åpnes/lukkes/angres,
+// ellers legger neste klikk til en søyle i stedet for å slå rekkverk av/på eller fjerne en søyle.
+function _skExitAddPostMode(){ if(SK.addPostMode) sketchToggleAddPostMode(); }
 function openSketchMode(){
+  _skExitAddPostMode();
   document.getElementById('sketch-overlay').classList.add('open');
   document.getElementById('sk-width-display').textContent=(W.widthCm||120)+' cm';
   setTimeout(sketchInit, 60);
 }
 function closeSketchMode(){
+  _skExitAddPostMode();
   document.getElementById('sketch-overlay').classList.remove('open');
 }
 
 function sketchInit(){
   const cv   = document.getElementById('sketch-cv');
-  const wrap = document.querySelector('.sketch-canvas-wrap');
+  const wrap = cv.parentElement; // gangbane-skissens egen flate (repos-skissen har en annen med samme klasse)
   const W2   = wrap.offsetWidth  || 700;
   const H2   = wrap.offsetHeight || 500;
   cv.width  = W2 * devicePixelRatio;
@@ -5804,7 +5819,8 @@ document.getElementById('sketch-cv').addEventListener('click',function(e){
   if(SK.closed){
     // Legg-til-søyle-modus har høyeste prioritet: klikket her betyr
     // uttrykkelig "legg til en søyle akkurat her", uansett hva som
-    // ellers ligger nærmest. Slår seg selv av etter bruk (engangs-modus).
+    // ellers ligger nærmest. Modusen blir stående på etter hvert klikk (så man
+    // kan sette flere søyler på rad) — slås av med knappen igjen eller Esc.
     // Bruker SAMME snap-funksjon som hover-forhåndsvisningen (kant-snap +
     // ortho-tracking mot eksisterende søyler), slik at det du ser er
     // nøyaktig det du får.
@@ -5812,8 +5828,7 @@ document.getElementById('sketch-cv').addEventListener('click',function(e){
       if(!SK.posts) SK.posts = _computeDefaultSketchPosts(SK.points, W.span/100);
       const snapped = _snapPostToEdgeAndPosts(clickPx, clickPy, SK.points, SK.posts);
       SK.posts.push({x: snapped.x, y: snapped.y});
-      SK._postHoverSnap = null;
-      sketchToggleAddPostMode(); // av igjen etter ett klikk
+      SK._postHoverSnap = null; // oppdateres av neste musebevegelse
       sketchDraw();
       return;
     }
@@ -5972,6 +5987,7 @@ function sketchApply(){
   showToast('✓ Gangbane generert fra skisse!');
 }
 function sketchUndo(){
+  _skExitAddPostMode();
   if(SK.closed){
     // Fjerner lukkings-kanten (siste punkt tilbake til første) sitt
     // linjetype-valg, siden den kanten ikke lenger eksisterer.
